@@ -1,4 +1,4 @@
-import { GameState, Vector2 } from '../types/Game';
+import { GameState, Vector2, WeaponId } from '../types/Game';
 import { createPlayer, updatePlayer } from '../entities/Player';
 import { createCamera, updateCamera } from './Camera';
 import { generateCityMap } from '../utils/CityMap';
@@ -22,6 +22,7 @@ export class GameLoop {
     const tiles = generateCityMap(30, 30);
     this.tileLookup = buildTileLookup(tiles);
     const collectibles = generateCoins(tiles);
+    const weapons: WeaponId[] = ['fist', 'pistol', 'knife', 'bat'];
     
     // Start player in center of map in world coordinates
     const startTileX = 15;
@@ -42,6 +43,8 @@ export class GameLoop {
         maxHealth: 100,
         wantedLevel: 0,
       },
+      weapons,
+      selectedWeapon: weapons[0],
       lastUpdate: 0,
     };
   }
@@ -53,6 +56,23 @@ export class GameLoop {
 
   setInput(input: Vector2) {
     this.input = { x: input.x, y: input.y };
+  }
+
+  setSelectedWeapon(weapon: WeaponId) {
+    if (!this.gameState.weapons.includes(weapon)) {
+      return;
+    }
+
+    if (this.gameState.selectedWeapon === weapon) {
+      return;
+    }
+
+    this.gameState = {
+      ...this.gameState,
+      selectedWeapon: weapon,
+    };
+
+    this.onUpdate(this.gameState);
   }
 
   start() {

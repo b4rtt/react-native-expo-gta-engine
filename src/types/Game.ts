@@ -12,6 +12,7 @@ export interface Vector3 {
 export type TileType = 'grass' | 'pavement' | 'road' | 'building';
 
 export type CollectibleType = 'coin';
+export type WeaponId = 'fist' | 'pistol' | 'knife' | 'bat';
 
 export interface Tile {
   x: number;
@@ -74,5 +75,7 @@ export interface GameState {
   tiles: Tile[];
   collectibles: Collectible[];
   stats: GameStats;
+  weapons: WeaponId[];
+  selectedWeapon: WeaponId;
   lastUpdate: number;
 }

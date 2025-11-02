@@ -6,7 +6,7 @@ import { GameLoop } from './src/systems/GameLoop';
 import { GameRenderer } from './src/components/GameRenderer';
 import { VirtualJoystick } from './src/components/VirtualJoystick';
 import { GameHUD } from './src/components/GameHUD';
-import { GameState, Vector2 } from './src/types/Game';
+import { GameState, Vector2, WeaponId } from './src/types/Game';
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -52,6 +52,12 @@ export default function App() {
     }
   };
 
+  const handleWeaponSelect = (weapon: WeaponId) => {
+    if (gameLoopRef.current) {
+      gameLoopRef.current.setSelectedWeapon(weapon);
+    }
+  };
+
   if (!gameState) {
     return (
       <View style={styles.container}>
@@ -68,7 +74,12 @@ export default function App() {
         width={screenSize.width}
         height={screenSize.height}
       />
-      <GameHUD stats={gameState.stats} />
+      <GameHUD
+        stats={gameState.stats}
+        weapons={gameState.weapons}
+        selectedWeapon={gameState.selectedWeapon}
+        onWeaponSelect={handleWeaponSelect}
+      />
       <VirtualJoystick onInputChange={handleInputChange} />
     </View>
   );

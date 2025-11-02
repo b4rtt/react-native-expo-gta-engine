@@ -24,7 +24,10 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
   const centerY = screenSize.height - joystickRadius - 30; // 30px from bottom edge
   
   const [stickPosition, setStickPosition] = useState({ x: 0, y: 0 });
+  const stickVisualRef = useRef({ x: 0, y: 0 });
+  const rafRef = useRef<number | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const DEADZONE = 0.12;
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -34,8 +37,31 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
       });
     });
 
-    return () => subscription?.remove();
+    return () => {
+      subscription?.remove();
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
   }, []);
+
+  const updateStickVisual = (nextPosition: { x: number; y: number }) => {
+    stickVisualRef.current = nextPosition;
+    if (rafRef.current !== null) {
+      return;
+    }
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      setStickPosition(stickVisualRef.current);
+    });
+  };
+
+  const resetStick = () => {
+    updateStickVisual({ x: 0, y: 0 });
+    onInputChange({ x: 0, y: 0 });
+    touchStartRef.current = null;
+  };
 
   const panResponder = useRef(
     PanResponder.create({
@@ -66,15 +92,11 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
         }
       },
       onPanResponderRelease: () => {
-        setStickPosition({ x: 0, y: 0 });
-        onInputChange({ x: 0, y: 0 });
-        touchStartRef.current = null;
+        resetStick();
       },
       onPanResponderTerminate: () => {
         // Also handle when touch is cancelled
-        setStickPosition({ x: 0, y: 0 });
-        onInputChange({ x: 0, y: 0 });
-        touchStartRef.current = null;
+        resetStick();
       },
     })
   ).current;
@@ -101,15 +123,21 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
     const stickX = normalizedX * clampedDistance;
     const stickY = normalizedY * clampedDistance;
 
-    setStickPosition({ x: stickX, y: stickY });
+    updateStickVisual({ x: stickX, y: stickY });
 
     // Calculate input (scale by distance for analog feel)
     const inputScale = clampedDistance / maxDistance;
+    if (inputScale < DEADZONE) {
+      onInputChange({ x: 0, y: 0 });
+      return;
+    }
+
+    const adjustedScale = (inputScale - DEADZONE) / (1 - DEADZONE);
     const input = {
-      x: normalizedX * inputScale,
-      y: normalizedY * inputScale,
+      x: normalizedX * adjustedScale,
+      y: normalizedY * adjustedScale,
     };
-    
+
     onInputChange(input);
   };
 
@@ -177,4 +205,3 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 1)',
   },
 });
-
