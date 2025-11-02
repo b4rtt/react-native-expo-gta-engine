@@ -210,15 +210,12 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
     <Canvas style={{ width, height, backgroundColor: '#1a1a1a' }}>
       <Group>
         {tiles.map(({ tile, screenX, screenY, neighbors, depth }) => {
-          const renderPlayerNow = !playerRendered && playerDepth <= depth;
-          if (renderPlayerNow) {
-            playerRendered = true;
-          }
+          const shouldRenderPlayerAfterSurface =
+            !playerRendered && playerDepth <= depth;
           const coinsForTile = coinsByTile.get(tileKey(tile.x, tile.y));
 
           return (
             <React.Fragment key={`tile-${tile.x}-${tile.y}`}>
-              {renderPlayerNow && renderPlayer()}
               {(tile.type === 'grass' || tile.type === 'pavement') && (
                 <IsometricGrass tile={tile} screenX={screenX} screenY={screenY} />
               )}
@@ -249,6 +246,10 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
                   />
                 </Group>
               ))}
+              {shouldRenderPlayerAfterSurface && (() => {
+                playerRendered = true;
+                return renderPlayer();
+              })()}
               {tile.type === 'building' && (
                 <IsometricBuilding
                   tile={tile}
@@ -298,16 +299,17 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
   return (
     <View style={[webStyles.root, { width, height }]}>
       {tiles.map(({ tile, screenX, screenY, neighbors, depth }) => {
-        const renderPlayerNow = !playerRendered && playerDepth <= depth;
-        if (renderPlayerNow) {
-          playerRendered = true;
-        }
+        const shouldRenderPlayerAfterSurface =
+          !playerRendered && playerDepth <= depth;
         const coinsForTile = coinsByTile.get(tileKey(tile.x, tile.y));
 
         return (
           <React.Fragment key={`tile-${tile.x}-${tile.y}`}>
-            {renderPlayerNow && renderPlayer()}
             {renderWebTile(tile, screenX, screenY, neighbors, coinsForTile)}
+            {shouldRenderPlayerAfterSurface && (() => {
+              playerRendered = true;
+              return renderPlayer();
+            })()}
           </React.Fragment>
         );
       })}
@@ -474,18 +476,10 @@ const webStyles = StyleSheet.create({
     width: TILE_SIZE,
     height: TILE_SIZE,
   },
-  grass: {
-    borderWidth: 1,
-    borderColor: '#1f3d1c',
-  },
-  pavement: {
-    borderWidth: 1,
-    borderColor: '#2e2e2e',
-  },
+  grass: {},
+  pavement: {},
   road: {
     backgroundColor: '#2a2a2a',
-    borderWidth: 1,
-    borderColor: '#1b1b1b',
   },
   roadStripeHorizontal: {
     position: 'absolute',

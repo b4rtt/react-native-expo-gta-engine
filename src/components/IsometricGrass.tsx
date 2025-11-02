@@ -33,13 +33,9 @@ export const IsometricGrass: React.FC<IsometricGrassProps> = ({
     ? ['#5b5b5b', '#616161', '#585858']
     : ['#3d6b34', '#4a7c3f', '#416e38'];
   const baseColor = palette[colorVariant];
-  const outlineColor = isPavement ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.2)';
-  
   return (
     <>
       <Path path={grassPath} color={baseColor} />
-      {/* Add subtle darker outline for depth */}
-      <Path path={grassPath} color={outlineColor} style="stroke" strokeWidth={1} />
     </>
   );
 };

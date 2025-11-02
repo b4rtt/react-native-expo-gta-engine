@@ -76,8 +76,6 @@ export const IsometricRoad: React.FC<IsometricRoadProps> = ({
     <Group>
       {/* Road base with slightly darker color for GTA 2 style */}
       <Path path={roadPath} color="#2a2a2a" />
-      {/* Add road texture/shading */}
-      <Path path={roadPath} color="rgba(0,0,0,0.3)" style="stroke" strokeWidth={1} />
       {/* Road markings in yellow */}
       {markings.map((marking, i) => (
         <Path key={i} path={marking} color="#e0c030" style="stroke" strokeWidth={2} />
