@@ -37,6 +37,10 @@ export class GameLoop {
       collectibles,
       stats: {
         coinsCollected: 0,
+        cash: 0,
+        health: 100,
+        maxHealth: 100,
+        wantedLevel: 0,
       },
       lastUpdate: 0,
     };
@@ -89,6 +93,7 @@ export class GameLoop {
       ? {
           ...this.gameState.stats,
           coinsCollected: this.gameState.stats.coinsCollected + collectedValue,
+          cash: this.gameState.stats.cash + collectedValue * 10,
         }
       : this.gameState.stats;
     

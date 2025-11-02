@@ -61,6 +61,10 @@ export interface Camera {
 
 export interface GameStats {
   coinsCollected: number;
+  cash: number;
+  health: number;
+  maxHealth: number;
+  wantedLevel: number; // 0-6
 }
 
 export interface GameState {

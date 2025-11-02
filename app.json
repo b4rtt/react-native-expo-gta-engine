@@ -14,7 +14,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.shapitoo.gtaengine"
+      "bundleIdentifier": "com.shapitoo.gtaengine",
+      "appleTeamId": "P3RNB5T3FP"
     },
     "android": {
       "adaptiveIcon": {
