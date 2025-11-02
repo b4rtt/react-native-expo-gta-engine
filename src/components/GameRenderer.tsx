@@ -32,7 +32,7 @@ interface ProjectedScene {
   tiles: ProjectedTile[];
   playerScreenPos: { x: number; y: number };
   playerDepth: number;
-  coinsByTile: Map<string, ProjectedCoin[]>;
+  coins: ProjectedCoin[];
 }
 
 const CULL_MARGIN = TILE_SIZE * 2;
@@ -69,7 +69,7 @@ const useProjectedScene = (
     }
 
     const projectedTiles: ProjectedTile[] = [];
-    const coinsByTile = new Map<string, ProjectedCoin[]>();
+    const projectedCoins: ProjectedCoin[] = [];
 
     for (const tile of tiles) {
       const worldPos = { x: tile.x * TILE_SIZE, y: tile.y * TILE_SIZE, z: 0 };
@@ -148,15 +148,7 @@ const useProjectedScene = (
         depth,
       };
 
-      const tileX = Math.floor(collectible.position.x / TILE_SIZE);
-      const tileY = Math.floor(collectible.position.y / TILE_SIZE);
-      const key = tileKey(tileX, tileY);
-      const existing = coinsByTile.get(key);
-      if (existing) {
-        existing.push(projectedCoin);
-      } else {
-        coinsByTile.set(key, [projectedCoin]);
-      }
+      projectedCoins.push(projectedCoin);
     }
 
     const playerScreenPos = {
@@ -171,7 +163,7 @@ const useProjectedScene = (
       tiles: projectedTiles,
       playerScreenPos,
       playerDepth,
-      coinsByTile,
+      coins: projectedCoins,
     };
   }, [tiles, collectibles, playerX, playerY, width, height]);
 };
@@ -183,84 +175,128 @@ export const GameRenderer: React.FC<GameRendererProps> = (props) => {
   return <SkiaGameRenderer {...props} />;
 };
 
+type RenderItem =
+  | { kind: 'surface'; depth: number; tile: ProjectedTile }
+  | { kind: 'building'; depth: number; tile: ProjectedTile }
+  | { kind: 'coin'; depth: number; coin: ProjectedCoin }
+  | { kind: 'player'; depth: number };
+
+const buildRenderQueue = (
+  tiles: ProjectedTile[],
+  coins: ProjectedCoin[],
+  playerDepth: number
+): RenderItem[] => {
+  const queue: RenderItem[] = [];
+
+  for (const tile of tiles) {
+    queue.push({ kind: 'surface', depth: tile.depth, tile });
+    if (tile.tile.type === 'building') {
+      queue.push({ kind: 'building', depth: tile.depth + 0.6, tile });
+    }
+  }
+
+  for (const coin of coins) {
+    queue.push({ kind: 'coin', depth: coin.depth + 0.3, coin });
+  }
+
+  queue.push({ kind: 'player', depth: playerDepth + 0.5 });
+
+  queue.sort((a, b) => a.depth - b.depth);
+  return queue;
+};
+
 const SkiaGameRenderer: React.FC<GameRendererProps> = ({
   gameState,
   width,
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, playerScreenPos, playerDepth, coinsByTile } = useProjectedScene(
+  const { tiles, coins, playerScreenPos, playerDepth } = useProjectedScene(
     gameState,
     width,
     height
   );
 
-  const renderPlayer = () => (
-    <Circle
-      cx={playerScreenPos.x}
-      cy={playerScreenPos.y}
-      r={player.size / 2}
-      color="#4CAF50"
-    />
+  const renderQueue = useMemo(
+    () => buildRenderQueue(tiles, coins, playerDepth),
+    [tiles, coins, playerDepth]
   );
-
-  let playerRendered = false;
 
   return (
     <Canvas style={{ width, height, backgroundColor: '#1a1a1a' }}>
       <Group>
-        {tiles.map(({ tile, screenX, screenY, neighbors, depth }) => {
-          const shouldRenderPlayerAfterSurface =
-            !playerRendered && playerDepth <= depth;
-          const coinsForTile = coinsByTile.get(tileKey(tile.x, tile.y));
-
-          return (
-            <React.Fragment key={`tile-${tile.x}-${tile.y}`}>
-              {(tile.type === 'grass' || tile.type === 'pavement') && (
-                <IsometricGrass tile={tile} screenX={screenX} screenY={screenY} />
-              )}
-              {tile.type === 'road' && (
-                <IsometricRoad
+        {renderQueue.map((item, index) => {
+          switch (item.kind) {
+            case 'surface': {
+              const { tile, screenX, screenY, neighbors } = item.tile;
+              if (tile.type === 'grass' || tile.type === 'pavement') {
+                return (
+                  <IsometricGrass
+                    key={`surface-${tile.x}-${tile.y}-${index}`}
+                    tile={tile}
+                    screenX={screenX}
+                    screenY={screenY}
+                  />
+                );
+              }
+              if (tile.type === 'road') {
+                return (
+                  <IsometricRoad
+                    key={`road-${tile.x}-${tile.y}-${index}`}
+                    tile={tile}
+                    screenX={screenX}
+                    screenY={screenY}
+                    neighbors={neighbors}
+                  />
+                );
+              }
+              return null;
+            }
+            case 'building': {
+              const { tile, screenX, screenY } = item.tile;
+              return (
+                <IsometricBuilding
+                  key={`building-${tile.x}-${tile.y}-${index}`}
                   tile={tile}
                   screenX={screenX}
                   screenY={screenY}
-                  neighbors={neighbors}
                 />
-              )}
-              {coinsForTile?.map(({ coin, screenX: coinX, screenY: coinY }) => (
-                <Group key={coin.id}>
-                  <Circle cx={coinX} cy={coinY} r={coin.radius} color={COIN_COLOR} />
+              );
+            }
+            case 'coin': {
+              const { coin, screenX, screenY } = item.coin;
+              return (
+                <Group key={`coin-${coin.id}-${index}`}>
+                  <Circle cx={screenX} cy={screenY} r={coin.radius} color={COIN_COLOR} />
                   <Circle
-                    cx={coinX}
-                    cy={coinY}
+                    cx={screenX}
+                    cy={screenY}
                     r={coin.radius}
                     color={COIN_OUTLINE}
                     style="stroke"
                     strokeWidth={2}
                   />
                   <Circle
-                    cx={coinX}
-                    cy={coinY - coin.radius * 0.4}
+                    cx={screenX}
+                    cy={screenY - coin.radius * 0.4}
                     r={coin.radius * 0.45}
                     color={COIN_HIGHLIGHT}
                   />
                 </Group>
-              ))}
-              {shouldRenderPlayerAfterSurface && (() => {
-                playerRendered = true;
-                return renderPlayer();
-              })()}
-              {tile.type === 'building' && (
-                <IsometricBuilding
-                  tile={tile}
-                  screenX={screenX}
-                  screenY={screenY}
+              );
+            }
+            case 'player':
+              return (
+                <Circle
+                  key="player"
+                  cx={playerScreenPos.x}
+                  cy={playerScreenPos.y}
+                  r={player.size / 2}
+                  color="#4CAF50"
                 />
-              )}
-            </React.Fragment>
-          );
+              );
+          }
         })}
-        {!playerRendered && renderPlayer()}
       </Group>
     </Canvas>
   );
@@ -272,130 +308,106 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, playerScreenPos, playerDepth, coinsByTile } = useProjectedScene(
+  const { tiles, coins, playerScreenPos, playerDepth } = useProjectedScene(
     gameState,
     width,
     height
   );
 
-  const renderPlayer = () => (
-    <View
-      style={{
-        position: 'absolute',
-        left: playerScreenPos.x - player.size / 2,
-        top: playerScreenPos.y - player.size / 2,
-        width: player.size,
-        height: player.size,
-        borderRadius: player.size / 2,
-        backgroundColor: '#4CAF50',
-        borderWidth: 2,
-        borderColor: '#2e7d32',
-      }}
-    />
+  const renderQueue = useMemo(
+    () => buildRenderQueue(tiles, coins, playerDepth),
+    [tiles, coins, playerDepth]
   );
 
-  let playerRendered = false;
-
   return (
-    <View style={[webStyles.root, { width, height }]}>
-      {tiles.map(({ tile, screenX, screenY, neighbors, depth }) => {
-        const shouldRenderPlayerAfterSurface =
-          !playerRendered && playerDepth <= depth;
-        const coinsForTile = coinsByTile.get(tileKey(tile.x, tile.y));
-
-        return (
-          <React.Fragment key={`tile-${tile.x}-${tile.y}`}>
-            {renderWebTile(tile, screenX, screenY, neighbors, coinsForTile)}
-            {shouldRenderPlayerAfterSurface && (() => {
-              playerRendered = true;
-              return renderPlayer();
-            })()}
-          </React.Fragment>
-        );
+    <View style={[webStyles.root, { width, height }]}> 
+      {renderQueue.map((item, index) => {
+        switch (item.kind) {
+          case 'surface': {
+            const { tile, screenX, screenY, neighbors } = item.tile;
+            return renderWebSurface(tile, screenX, screenY, neighbors, index);
+          }
+          case 'building': {
+            const { tile, screenX, screenY } = item.tile;
+            return renderWebBuilding(tile, screenX, screenY, index);
+          }
+          case 'coin': {
+            const { coin, screenX, screenY } = item.coin;
+            return renderWebCoin(coin, screenX, screenY, index);
+          }
+          case 'player':
+            return (
+              <View
+                key="player"
+                style={{
+                  position: 'absolute',
+                  left: playerScreenPos.x - player.size / 2,
+                  top: playerScreenPos.y - player.size / 2,
+                  width: player.size,
+                  height: player.size,
+                  borderRadius: player.size / 2,
+                  backgroundColor: '#4CAF50',
+                  borderWidth: 2,
+                  borderColor: '#2e7d32',
+                }}
+              />
+            );
+        }
       })}
-      {!playerRendered && renderPlayer()}
     </View>
   );
 };
 
-const renderWebTile = (
+const renderWebSurface = (
   tile: Tile,
   screenX: number,
   screenY: number,
   neighbors: RoadNeighbors,
-  coinsForTile?: ProjectedCoin[]
+  key: number
 ) => {
-  const coinElements = coinsForTile?.map(({ coin, screenX: coinX, screenY: coinY }) => (
-    <View
-      key={coin.id}
-      style={[
-        webStyles.coin,
-        {
-          left: coinX - coin.radius,
-          top: coinY - coin.radius,
-          width: coin.radius * 2,
-          height: coin.radius * 2,
-          borderRadius: coin.radius,
-        },
-      ]}
-    >
-      <View
-        style={[
-          webStyles.coinHighlight,
-          {
-            width: coin.radius,
-            height: coin.radius,
-            borderRadius: coin.radius / 2,
-          },
-        ]}
-      />
-    </View>
-  ));
-
   if (tile.type === 'grass' || tile.type === 'pavement') {
     const palette = tile.type === 'pavement' ? PAVEMENT_COLORS : GRASS_COLORS;
     const colorVariant = (tile.x + tile.y) % palette.length;
     const baseColor = palette[colorVariant];
     return (
-      <>
-        <View
-          style={[
-            webStyles.tileBase,
-            tile.type === 'pavement' ? webStyles.pavement : webStyles.grass,
-            {
-              left: screenX,
-              top: screenY,
-              backgroundColor: baseColor,
-            },
-          ]}
-        />
-        {coinElements}
-      </>
+      <View
+        key={`surface-${tile.x}-${tile.y}-${key}`}
+        style={[
+          webStyles.tileBase,
+          {
+            left: screenX,
+            top: screenY,
+            backgroundColor: baseColor,
+          },
+        ]}
+      />
     );
   }
 
   if (tile.type === 'road') {
     return (
-      <>
-        <View
-          style={[webStyles.tileBase, webStyles.road, { left: screenX, top: screenY }]}
-        >
-          {(neighbors.left || neighbors.right) && (
-            <View style={webStyles.roadStripeHorizontal} />
+      <View
+        key={`road-${tile.x}-${tile.y}-${key}`}
+        style={[webStyles.tileBase, webStyles.road, { left: screenX, top: screenY }]}
+      >
+        {(neighbors.left || neighbors.right) && (
+          <View style={webStyles.roadStripeHorizontal} />
+        )}
+        {(neighbors.top || neighbors.bottom) && (
+          <View style={webStyles.roadStripeVertical} />
+        )}
+        {(neighbors.left || neighbors.right) &&
+          (neighbors.top || neighbors.bottom) && (
+            <View style={webStyles.roadIntersection} />
           )}
-          {(neighbors.top || neighbors.bottom) && (
-            <View style={webStyles.roadStripeVertical} />
-          )}
-          {(neighbors.left || neighbors.right) &&
-            (neighbors.top || neighbors.bottom) && (
-              <View style={webStyles.roadIntersection} />
-            )}
-        </View>
-        {coinElements}
-      </>
+      </View>
     );
   }
 
+  return null;
+};
+
+const renderWebBuilding = (tile: Tile, screenX: number, screenY: number, key: number) => {
   const buildingHeight = tile.buildingHeight || 1;
   const footprint = TILE_SIZE * 0.8;
   const offset = (TILE_SIZE - footprint) / 2;
@@ -408,7 +420,7 @@ const renderWebTile = (
   const lighter = adjustBrightness(baseColor, 1.3);
 
   return (
-    <>
+    <React.Fragment key={`building-${tile.x}-${tile.y}-${key}`}>
       <View
         style={[
           webStyles.buildingShadow,
@@ -445,10 +457,36 @@ const renderWebTile = (
           },
         ]}
       />
-      {coinElements}
-    </>
+    </React.Fragment>
   );
 };
+
+const renderWebCoin = (coin: Collectible, screenX: number, screenY: number, key: number) => (
+  <View
+    key={`coin-${coin.id}-${key}`}
+    style={[
+      webStyles.coin,
+      {
+        left: screenX - coin.radius,
+        top: screenY - coin.radius,
+        width: coin.radius * 2,
+        height: coin.radius * 2,
+        borderRadius: coin.radius,
+      },
+    ]}
+  >
+    <View
+      style={[
+        webStyles.coinHighlight,
+        {
+          width: coin.radius,
+          height: coin.radius,
+          borderRadius: coin.radius / 2,
+        },
+      ]}
+    />
+  </View>
+);
 
 const adjustBrightness = (hexColor: string, factor: number): string => {
   const hex = hexColor.replace('#', '');
@@ -476,8 +514,6 @@ const webStyles = StyleSheet.create({
     width: TILE_SIZE,
     height: TILE_SIZE,
   },
-  grass: {},
-  pavement: {},
   road: {
     backgroundColor: '#2a2a2a',
   },
