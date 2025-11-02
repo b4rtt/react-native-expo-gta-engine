@@ -27,7 +27,7 @@ export const IsometricGrass: React.FC<IsometricGrassProps> = ({
     height: tileHeight,
   });
   
-  const isPavement = tile.type === 'pavement';
+  const isPavement = tile.type === 'pavement' || tile.type === 'building';
   const colorVariant = (tile.x + tile.y) % 3;
   const palette = isPavement
     ? ['#5b5b5b', '#616161', '#585858']

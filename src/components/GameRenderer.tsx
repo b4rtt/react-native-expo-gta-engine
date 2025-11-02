@@ -299,7 +299,7 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
           switch (item.kind) {
             case 'surface': {
               const { tile, screenX, screenY, neighbors } = item.tile;
-              if (tile.type === 'grass' || tile.type === 'pavement') {
+              if (tile.type === 'grass' || tile.type === 'pavement' || tile.type === 'building') {
                 return (
                   <IsometricGrass
                     key={`surface-${tile.x}-${tile.y}-${index}`}
@@ -547,13 +547,14 @@ const renderWebSurface = (
   neighbors: RoadNeighbors,
   key: number
 ) => {
-  if (tile.type === 'grass' || tile.type === 'pavement') {
-    const palette = tile.type === 'pavement' ? PAVEMENT_COLORS : GRASS_COLORS;
+  if (tile.type === 'grass' || tile.type === 'pavement' || tile.type === 'building') {
+    // Buildings should have pavement underneath
+    const palette = (tile.type === 'pavement' || tile.type === 'building') ? PAVEMENT_COLORS : GRASS_COLORS;
     const colorVariant = (tile.x + tile.y) % palette.length;
     const baseColor = palette[colorVariant];
     
     // Check if this is a pavement tile adjacent to roads
-    const isPavement = tile.type === 'pavement';
+    const isPavement = tile.type === 'pavement' || tile.type === 'building';
     const hasCurbTop = isPavement && neighbors.top;
     const hasCurbBottom = isPavement && neighbors.bottom;
     const hasCurbLeft = isPavement && neighbors.left;

@@ -62,11 +62,42 @@ export const createNPC = (x: number, y: number, id: string): NPC => {
     position: { x, y },
     rotation: Math.random() * Math.PI * 2,
     speed: 0,
-    size: 28, // Slightly smaller than player
+    size: 20, // Smaller than player
     target: { x, y }, // Start with current position as target
     color: NPC_COLORS[colorIndex],
     behavior: 'wander',
   };
+};
+
+const isWalkableTile = (tileType?: TileType): boolean => {
+  if (!tileType) return false;
+  return tileType === 'road' || tileType === 'pavement';
+};
+
+const findWalkableTarget = (
+  currentPos: Vector2,
+  tileLookup: TileLookup,
+  tileSize: number
+): Vector2 => {
+  // Try to find a walkable target nearby
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 30 + Math.random() * 100; // 30-130 pixels away
+    
+    const targetX = currentPos.x + Math.cos(angle) * distance;
+    const targetY = currentPos.y + Math.sin(angle) * distance;
+    
+    const tileX = Math.floor(targetX / tileSize);
+    const tileY = Math.floor(targetY / tileSize);
+    const tile = getTileAt(tileLookup, tileX, tileY);
+    
+    if (isWalkableTile(tile?.type)) {
+      return { x: targetX, y: targetY };
+    }
+  }
+  
+  // Fallback to current position
+  return currentPos;
 };
 
 export const updateNPC = (
@@ -76,10 +107,10 @@ export const updateNPC = (
   playerPosition: Vector2,
   otherNPCs: NPC[]
 ): NPC => {
-  const wanderSpeed = 60 + Math.random() * 40; // 60-100 pixels per second
+  const wanderSpeed = 35 + Math.random() * 20; // 35-55 pixels per second (slower)
   const targetThreshold = 10; // How close to target before picking new one
   const playerAvoidanceRadius = 50; // Stay away from player
-  const npcAvoidanceRadius = 40; // Stay away from other NPCs
+  const npcAvoidanceRadius = 30; // Stay away from other NPCs
 
   let newTarget = { ...npc.target };
   
@@ -87,14 +118,8 @@ export const updateNPC = (
   const distanceToTarget = length(subtract(npc.target, npc.position));
   
   if (distanceToTarget < targetThreshold) {
-    // Pick new random target nearby
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 50 + Math.random() * 150; // 50-200 pixels away
-    
-    newTarget = {
-      x: npc.position.x + Math.cos(angle) * distance,
-      y: npc.position.y + Math.sin(angle) * distance,
-    };
+    // Pick new walkable target nearby
+    newTarget = findWalkableTarget(npc.position, tileLookup, TILE_SIZE);
   }
 
   // Calculate direction to target
@@ -144,44 +169,56 @@ export const updateNPC = (
   const radius = npc.size / 2;
   const positionAfterMovement = { ...npc.position };
 
-  // X-axis collision
+  // X-axis movement with walkable check
   if (movement.x !== 0) {
     const proposed = {
       x: npc.position.x + movement.x,
       y: positionAfterMovement.y,
     };
+    
+    const proposedTileX = Math.floor(proposed.x / TILE_SIZE);
+    const proposedTileY = Math.floor(proposed.y / TILE_SIZE);
+    const proposedTile = getTileAt(tileLookup, proposedTileX, proposedTileY);
 
-    if (collidesWithBlockingTile(proposed, radius, tileLookup)) {
-      // Hit a wall on X axis - pick new target
-      const angle = Math.random() * Math.PI * 2;
-      const distance = 50 + Math.random() * 150;
-      newTarget = {
-        x: npc.position.x + Math.cos(angle) * distance,
-        y: npc.position.y + Math.sin(angle) * distance,
-      };
-    } else {
+    // Only move if on walkable tile AND no blocking collision
+    if (isWalkableTile(proposedTile?.type) && !collidesWithBlockingTile(proposed, radius, tileLookup)) {
       positionAfterMovement.x = proposed.x;
+    } else {
+      // Can't move, pick new target
+      newTarget = findWalkableTarget(npc.position, tileLookup, TILE_SIZE);
     }
   }
 
-  // Y-axis collision
+  // Y-axis movement with walkable check
   if (movement.y !== 0) {
     const proposed = {
       x: positionAfterMovement.x,
       y: npc.position.y + movement.y,
     };
+    
+    const proposedTileX = Math.floor(proposed.x / TILE_SIZE);
+    const proposedTileY = Math.floor(proposed.y / TILE_SIZE);
+    const proposedTile = getTileAt(tileLookup, proposedTileX, proposedTileY);
 
-    if (collidesWithBlockingTile(proposed, radius, tileLookup)) {
-      // Hit a wall on Y axis - pick new target
-      const angle = Math.random() * Math.PI * 2;
-      const distance = 50 + Math.random() * 150;
-      newTarget = {
-        x: npc.position.x + Math.cos(angle) * distance,
-        y: npc.position.y + Math.sin(angle) * distance,
-      };
-    } else {
+    // Only move if on walkable tile AND no blocking collision
+    if (isWalkableTile(proposedTile?.type) && !collidesWithBlockingTile(proposed, radius, tileLookup)) {
       positionAfterMovement.y = proposed.y;
+    } else {
+      // Can't move, pick new target
+      newTarget = findWalkableTarget(npc.position, tileLookup, TILE_SIZE);
     }
+  }
+  
+  // Safety check - if current position is not walkable, find walkable position
+  const currentTileX = Math.floor(positionAfterMovement.x / TILE_SIZE);
+  const currentTileY = Math.floor(positionAfterMovement.y / TILE_SIZE);
+  const currentTile = getTileAt(tileLookup, currentTileX, currentTileY);
+  
+  if (!isWalkableTile(currentTile?.type)) {
+    // Revert to previous position and find new target
+    positionAfterMovement.x = npc.position.x;
+    positionAfterMovement.y = npc.position.y;
+    newTarget = findWalkableTarget(npc.position, tileLookup, TILE_SIZE);
   }
 
   // Update rotation based on movement direction
@@ -212,7 +249,7 @@ export const spawnNPCsInCity = (
   let attempts = 0;
 
   for (let i = 0; i < count && attempts < maxAttempts; attempts++) {
-    // Try to spawn on pavement or grass tiles (not roads or buildings)
+    // Try to spawn on pavement or road tiles only
     const x = Math.random() * citySize * tileSize;
     const y = Math.random() * citySize * tileSize;
 
@@ -220,14 +257,14 @@ export const spawnNPCsInCity = (
     const tileY = Math.floor(y / tileSize);
     const tile = getTileAt(tileLookup, tileX, tileY);
 
-    // Only spawn on safe tiles
-    if (tile && (tile.type === 'pavement' || tile.type === 'grass')) {
+    // Only spawn on walkable tiles (roads and pavements)
+    if (tile && isWalkableTile(tile.type)) {
       const npc = createNPC(x, y, `npc-${i}`);
       
       // Check if too close to other NPCs
       const tooClose = npcs.some(other => {
         const dist = length(subtract(other.position, npc.position));
-        return dist < 100; // Minimum 100 pixels apart
+        return dist < 80; // Minimum 80 pixels apart
       });
 
       if (!tooClose) {
