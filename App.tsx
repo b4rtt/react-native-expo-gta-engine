@@ -5,6 +5,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { GameLoop } from './src/systems/GameLoop';
 import { GameRenderer } from './src/components/GameRenderer';
 import { VirtualJoystick } from './src/components/VirtualJoystick';
+import { GameHUD } from './src/components/GameHUD';
 import { GameState, Vector2 } from './src/types/Game';
 
 export default function App() {
@@ -67,6 +68,7 @@ export default function App() {
         width={screenSize.width}
         height={screenSize.height}
       />
+      <GameHUD stats={gameState.stats} />
       <VirtualJoystick onInputChange={handleInputChange} />
     </View>
   );
@@ -76,5 +78,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a1a1a',
+    position: 'relative',
   },
 });

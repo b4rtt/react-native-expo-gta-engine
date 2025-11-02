@@ -3,15 +3,15 @@
 Actionable tasks that bring the prototype closer to the GTA 2 experience. Items are grouped by feature areas and ordered by priority. Check boxes track completion status.
 
 ## Core Gameplay
-- [ ] Lock the camera so the player sprite remains exactly at screen center on every frame (audit `GameRenderer` + `updateCamera` behaviour during resizing).
-- [ ] Implement solid collision for buildings, road edges, and props (axis-aligned grid colliders first, then expand to per-tile flags).
-- [ ] Add collectible coins/loot that spawn across the city, update HUD counters, and respawn logically.
+- [x] Lock the camera so the player sprite remains exactly at screen center on every frame (audit `GameRenderer` + `updateCamera` behaviour during resizing).
+- [x] Implement solid collision for buildings, road edges, and props (axis-aligned grid colliders first, then expand to per-tile flags).
+- [x] Add collectible coins/loot that spawn across the city, update HUD counters, and respawn logically.
 - [ ] Introduce NPC pedestrians with simple wandering AI and collision avoidance.
 - [ ] Support entering/exiting vehicles: parked car entities, state transition to driving mode, and vehicle handling model.
 
 ## Controls & UI
 - [ ] Rework the virtual joystick visuals and responsiveness; provide optional keyboard mapping on web.
-- [ ] Add an on-screen GTA-style HUD (health, cash, minimap placeholder, wanted stars stub).
+- [x] Add an on-screen GTA-style HUD (health, cash, minimap placeholder, wanted stars stub).
 - [ ] Build a pause menu with resume/settings/exit and wire it into the game loop.
 - [ ] Create a main menu scene with start game / options / credits flow.
 
@@ -39,4 +39,3 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [ ] Expose debug overlays (FPS counter, collision boxes, tile coordinates).
 - [ ] Add save/load of player progress and world state.
 - [ ] Prepare CI script that runs TypeScript checks and linting on push.
-

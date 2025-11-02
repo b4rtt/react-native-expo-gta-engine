@@ -3,6 +3,8 @@ import { createPlayer, updatePlayer } from '../entities/Player';
 import { createCamera, updateCamera } from './Camera';
 import { generateCityMap } from '../utils/CityMap';
 import { TILE_SIZE } from '../utils/Isometric';
+import { buildTileLookup, TileLookup } from '../utils/TileLookup';
+import { generateCoins, resolveCoinCollection } from '../utils/Collectibles';
 
 export class GameLoop {
   private gameState: GameState;
@@ -12,11 +14,14 @@ export class GameLoop {
   private animationFrameId: number | null = null;
   private lastTime: number = 0;
   private onUpdate: (state: GameState) => void;
+  private tileLookup: TileLookup;
 
   constructor(onUpdate: (state: GameState) => void) {
     this.onUpdate = onUpdate;
     // Generate city map (30x30 tiles for a bigger city)
     const tiles = generateCityMap(30, 30);
+    this.tileLookup = buildTileLookup(tiles);
+    const collectibles = generateCoins(tiles);
     
     // Start player in center of map in world coordinates
     const startTileX = 15;
@@ -29,6 +34,10 @@ export class GameLoop {
       camera: createCamera(startWorldX, startWorldY),
       entities: [],
       tiles,
+      collectibles,
+      stats: {
+        coinsCollected: 0,
+      },
       lastUpdate: 0,
     };
   }
@@ -63,8 +72,25 @@ export class GameLoop {
     const updatedPlayer = updatePlayer(
       this.gameState.player,
       this.input,
-      deltaTime
+      deltaTime,
+      this.tileLookup
     );
+
+    const {
+      collectibles: updatedCollectibles,
+      collectedValue,
+    } = resolveCoinCollection(
+      this.gameState.collectibles,
+      updatedPlayer.position,
+      updatedPlayer.size / 2
+    );
+
+    const updatedStats = collectedValue
+      ? {
+          ...this.gameState.stats,
+          coinsCollected: this.gameState.stats.coinsCollected + collectedValue,
+        }
+      : this.gameState.stats;
     
     // Update camera (returns new camera object)
     const updatedCamera = updateCamera(
@@ -80,6 +106,8 @@ export class GameLoop {
       ...this.gameState,
       player: updatedPlayer,
       camera: updatedCamera,
+      collectibles: updatedCollectibles,
+      stats: updatedStats,
       lastUpdate: currentTime,
     };
 

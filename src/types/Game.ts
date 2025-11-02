@@ -11,6 +11,8 @@ export interface Vector3 {
 
 export type TileType = 'grass' | 'pavement' | 'road' | 'building';
 
+export type CollectibleType = 'coin';
+
 export interface Tile {
   x: number;
   y: number;
@@ -24,6 +26,15 @@ export interface Entity {
   rotation: number;
   speed: number;
   size: number;
+}
+
+export interface Collectible {
+  id: string;
+  type: CollectibleType;
+  position: Vector2;
+  radius: number;
+  value: number;
+  collected: boolean;
 }
 
 export type Direction = 'front' | 'back' | 'right' | 'left';
@@ -48,10 +59,16 @@ export interface Camera {
   zoom: number;
 }
 
+export interface GameStats {
+  coinsCollected: number;
+}
+
 export interface GameState {
   player: Player;
   camera: Camera;
   entities: Entity[];
   tiles: Tile[];
+  collectibles: Collectible[];
+  stats: GameStats;
   lastUpdate: number;
 }
