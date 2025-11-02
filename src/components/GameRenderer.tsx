@@ -406,18 +406,7 @@ const renderWebSurface = (
 };
 
 const renderWebBuilding = (tile: Tile, screenX: number, screenY: number, key: number) => {
-  const buildingHeight = tile.buildingHeight || 1;
-  const footprint = TILE_SIZE * 0.8;
-  const offset = (TILE_SIZE - footprint) / 2;
-  const elevation = buildingHeight * (TILE_SIZE / 6);
-  const colorVariant =
-    ((tile.x * 7 + tile.y * 13) % BUILDING_BASE_COLORS.length + BUILDING_BASE_COLORS.length) %
-    BUILDING_BASE_COLORS.length;
-  const baseColor = BUILDING_BASE_COLORS[colorVariant];
-  const darker = adjustBrightness(baseColor, 0.85);
-  const lighter = adjustBrightness(baseColor, 1.3);
-  const floors = Math.min(buildingHeight, 3);
-  const windowHeight = (elevation + footprint) / Math.max(1, buildingHeight) * 0.3;
+  const style = computeBuildingStyle(tile, screenX, screenY);
 
   return (
     <React.Fragment key={`building-${tile.x}-${tile.y}-${key}`}>
@@ -425,10 +414,10 @@ const renderWebBuilding = (tile: Tile, screenX: number, screenY: number, key: nu
         style={[
           webStyles.buildingShadow,
           {
-            left: screenX + offset + 4,
-            top: screenY + offset + 4,
-            width: footprint,
-            height: footprint,
+            left: style.shadow.x,
+            top: style.shadow.y,
+            width: style.shadow.width,
+            height: style.shadow.height,
           },
         ]}
       />
@@ -436,12 +425,12 @@ const renderWebBuilding = (tile: Tile, screenX: number, screenY: number, key: nu
         style={[
           webStyles.buildingBody,
           {
-            left: screenX + offset,
-            top: screenY + offset - elevation,
-            width: footprint,
-            height: footprint + elevation,
-            backgroundColor: baseColor,
-            borderColor: darker,
+            left: style.body.x,
+            top: style.body.y,
+            width: style.body.width,
+            height: style.body.height,
+            backgroundColor: style.bodyColor,
+            borderColor: style.bodyBorderColor,
           },
         ]}
       />
@@ -449,41 +438,28 @@ const renderWebBuilding = (tile: Tile, screenX: number, screenY: number, key: nu
         style={[
           webStyles.buildingRoof,
           {
-            left: screenX + offset,
-            top: screenY + offset - elevation,
-            width: footprint,
-            height: footprint,
-            backgroundColor: lighter,
+            left: style.roof.x,
+            top: style.roof.y,
+            width: style.roof.width,
+            height: style.roof.height,
+            backgroundColor: style.roofColor,
           },
         ]}
       />
-      {buildingHeight > 1 &&
-        Array.from({ length: floors }).map((_, floor) => {
-          const y =
-            screenY +
-            offset -
-            elevation +
-            (elevation / Math.max(1, buildingHeight)) * floor +
-            6;
-          return (
-            <View key={`window-row-${floor}`}>
-              {[0.25, 0.5, 0.75].map((position, windowIndex) => (
-                <View
-                  key={`window-${floor}-${windowIndex}`}
-                  style={{
-                    position: 'absolute',
-                    left: screenX + offset + footprint * position - 6,
-                    top: y,
-                    width: 12,
-                    height: windowHeight,
-                    borderRadius: 2,
-                    backgroundColor: '#ffcc66',
-                  }}
-                />
-              ))}
-            </View>
-          );
-        })}
+      {style.windows.map((windowRect, index) => (
+        <View
+          key={`window-${index}`}
+          style={{
+            position: 'absolute',
+            left: windowRect.x,
+            top: windowRect.y,
+            width: windowRect.width,
+            height: windowRect.height,
+            borderRadius: 2,
+            backgroundColor: style.windowColor,
+          }}
+        />
+      ))}
     </React.Fragment>
   );
 };
@@ -514,21 +490,6 @@ const renderWebCoin = (coin: Collectible, screenX: number, screenY: number, key:
     />
   </View>
 );
-
-const adjustBrightness = (hexColor: string, factor: number): string => {
-  const hex = hexColor.replace('#', '');
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-
-  const newR = Math.min(255, Math.floor(r * factor));
-  const newG = Math.min(255, Math.floor(g * factor));
-  const newB = Math.min(255, Math.floor(b * factor));
-
-  return `#${newR.toString(16).padStart(2, '0')}${newG
-    .toString(16)
-    .padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
-};
 
 const webStyles = StyleSheet.create({
   root: {
