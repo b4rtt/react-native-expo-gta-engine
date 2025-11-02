@@ -1,14 +1,56 @@
 import { Tile, TileType, RoadConnection } from '../types/Game';
 
 /**
- * Generate a GTA 2-style city map with buildings and road grid
+ * Generate a GTA 2-style city map with varied roads and districts
  */
-const BLOCK_SIZE = 5;
+
+const roadMap = new Map<string, boolean>();
 
 const isRoad = (x: number, y: number): boolean => {
-  const isRoadX = x % BLOCK_SIZE === 0;
-  const isRoadY = y % BLOCK_SIZE === 0;
-  return isRoadX || isRoadY;
+  return roadMap.has(`${x},${y}`);
+};
+
+const createRoadNetwork = (width: number, height: number) => {
+  roadMap.clear();
+  
+  // Create a clear grid pattern with some variation
+  // Main roads every 6 tiles
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const seed = x * 73 + y * 37;
+      
+      // Primary grid - every 6 tiles
+      if (x % 6 === 0 || y % 6 === 0) {
+        roadMap.set(`${x},${y}`, true);
+      }
+      
+      // Downtown area - denser grid (every 4 tiles)
+      const distFromCenter = Math.sqrt((x - width/2) ** 2 + (y - height/2) ** 2);
+      if (distFromCenter < width * 0.25) {
+        if (x % 4 === 0 || y % 4 === 0) {
+          roadMap.set(`${x},${y}`, true);
+        }
+      }
+      
+      // Occasional secondary roads
+      if (seed % 30 === 0 && x % 3 === 0) {
+        // Vertical connector
+        for (let dy = -3; dy <= 3; dy++) {
+          if (y + dy >= 0 && y + dy < height) {
+            roadMap.set(`${x},${y + dy}`, true);
+          }
+        }
+      }
+      if (seed % 35 === 0 && y % 3 === 0) {
+        // Horizontal connector
+        for (let dx = -3; dx <= 3; dx++) {
+          if (x + dx >= 0 && x + dx < width) {
+            roadMap.set(`${x + dx},${y}`, true);
+          }
+        }
+      }
+    }
+  }
 };
 
 const getRoadConnections = (x: number, y: number): RoadConnection => {
@@ -22,68 +64,66 @@ const getRoadConnections = (x: number, y: number): RoadConnection => {
 
 export const generateCityMap = (width: number, height: number): Tile[] => {
   const tiles: Tile[] = [];
+  
+  // First create road network
+  createRoadNetwork(width, height);
 
   // Create a grid of tiles
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       let type: TileType = 'grass';
+      const seed = x * 73 + y * 37;
+      const distFromCenter = Math.sqrt((x - width/2) ** 2 + (y - height/2) ** 2);
       
-      // Create roads in a grid pattern (every 5th tile)
+      // Check if this is a road
       if (isRoad(x, y)) {
         type = 'road';
       }
 
-      // Add sidewalks/pavement hugging the road grid
+      // Add sidewalks/pavement next to roads
       if (type === 'grass') {
-        const isPavementX =
-          x % BLOCK_SIZE === 1 || x % BLOCK_SIZE === BLOCK_SIZE - 1;
-        const isPavementY =
-          y % BLOCK_SIZE === 1 || y % BLOCK_SIZE === BLOCK_SIZE - 1;
-        if (isPavementX || isPavementY) {
+        const hasRoadNearby = 
+          isRoad(x - 1, y) || isRoad(x + 1, y) || 
+          isRoad(x, y - 1) || isRoad(x, y + 1);
+        
+        if (hasRoadNearby) {
           type = 'pavement';
         }
       }
       
-      // Add occasional alleyways (narrow roads between blocks)
-      if (type === 'pavement') {
-        const blockX = x % BLOCK_SIZE;
-        const blockY = y % BLOCK_SIZE;
-        const seed = x * 73 + y * 37;
-        
-        // Vertical alley
-        if (blockX === 2 && seed % 7 === 0) {
-          type = 'road';
-        }
-        // Horizontal alley
-        if (blockY === 2 && seed % 8 === 0) {
-          type = 'road';
-        }
-      }
-      
-      // Create buildings in city blocks
+      // Create buildings
       if (type === 'grass') {
-        // City block coordinates
-        const blockX = x % BLOCK_SIZE;
-        const blockY = y % BLOCK_SIZE;
+        // More buildings in center, fewer on edges
+        // Lower number = more buildings (50% chance in center, 40% on edges)
+        const buildingChance = distFromCenter < width * 0.25 ? 2 : 
+                               distFromCenter < width * 0.4 ? 3 : 5;
         
-        // Place buildings in center of blocks with some variation
-        if ((blockX === 2 || blockX === 3) && (blockY === 2 || blockY === 3)) {
-          // Use pseudo-random but deterministic building placement
-          const seed = x * 73 + y * 37;
-          if (seed % 3 !== 0) { // 66% chance of building
-            type = 'building';
-            // Taller buildings in city center, shorter on edges
-            const distFromCenter = Math.abs(x - width / 2) + Math.abs(y - height / 2);
-            const maxHeight = Math.max(1, 4 - Math.floor(distFromCenter / 10));
-            const heightVariation = (seed % maxHeight) + 1;
-            tiles.push({
-              x,
-              y,
-              type,
-              buildingHeight: Math.min(heightVariation, maxHeight),
-            });
-            continue;
-          }
+        if (seed % buildingChance === 0) {
+          type = 'building';
+          // Taller buildings in city center
+          const maxHeight = distFromCenter < width * 0.2 ? 5 : 
+                           distFromCenter < width * 0.35 ? 3 : 2;
+          const heightVariation = 1 + (seed % maxHeight);
+          tiles.push({
+            x,
+            y,
+            type,
+            buildingHeight: heightVariation,
+          });
+          continue;
+        }
+        
+        // Additional scattered buildings
+        if ((seed * 17) % 7 === 0) {
+          type = 'building';
+          const heightVariation = 1 + ((seed * 19) % 3);
+          tiles.push({
+            x,
+            y,
+            type,
+            buildingHeight: heightVariation,
+          });
+          continue;
         }
       }
       

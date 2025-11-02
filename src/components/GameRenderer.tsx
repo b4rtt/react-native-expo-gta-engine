@@ -464,69 +464,79 @@ const shouldHaveTrafficLight = (tile: Tile, neighbors: RoadNeighbors): boolean =
   return false;
 };
 
-const renderTrafficLight = (screenX: number, screenY: number, key: number) => {
-  const lightSize = TILE_SIZE * 0.15;
-  const poleHeight = TILE_SIZE * 0.4;
+const renderTrafficLight = (
+  tileX: number, 
+  tileY: number, 
+  corner: number
+) => {
+  const lightSize = TILE_SIZE * 0.1;
+  const poleHeight = TILE_SIZE * 0.25;
+  
+  // Use tile position and corner to create a deterministic offset for light cycles
+  const cycleOffset = (tileX * 73 + tileY * 37 + corner * 11) % 12;
+  const currentTime = Date.now();
+  const cycleTime = (Math.floor(currentTime / 1000) + cycleOffset) % 12; // 12 second cycle
+  
+  // Traffic light states: 0-5 = red, 6-7 = yellow, 8-11 = green
+  const isRed = cycleTime < 6;
+  const isYellow = cycleTime >= 6 && cycleTime < 8;
+  const isGreen = cycleTime >= 8;
   
   return (
-    <View key={`traffic-light-${key}`} style={{ position: 'absolute', left: screenX, top: screenY }}>
+    <>
       {/* Traffic light pole */}
       <View
         style={{
-          position: 'absolute',
-          left: TILE_SIZE * 0.85,
-          top: TILE_SIZE * 0.1,
-          width: 4,
+          width: 3,
           height: poleHeight,
-          backgroundColor: '#333',
+          backgroundColor: '#444',
         }}
       />
       {/* Traffic light box */}
       <View
         style={{
-          position: 'absolute',
-          left: TILE_SIZE * 0.85 - lightSize / 2 + 2,
-          top: TILE_SIZE * 0.1,
           width: lightSize,
-          height: lightSize * 3,
+          height: lightSize * 2.8,
           backgroundColor: '#222',
           borderWidth: 1,
           borderColor: '#000',
-          borderRadius: 2,
+          borderRadius: 1,
+          marginTop: -lightSize * 2.8,
+          marginLeft: -lightSize / 2 + 1.5,
         }}
       >
         {/* Red light */}
         <View
           style={{
-            width: lightSize * 0.6,
-            height: lightSize * 0.6,
-            borderRadius: (lightSize * 0.6) / 2,
-            backgroundColor: '#ff4444',
-            margin: lightSize * 0.2,
+            width: lightSize * 0.7,
+            height: lightSize * 0.7,
+            borderRadius: (lightSize * 0.7) / 2,
+            backgroundColor: isRed ? '#ff4444' : '#331111',
+            margin: lightSize * 0.15,
           }}
         />
         {/* Yellow light */}
         <View
           style={{
-            width: lightSize * 0.6,
-            height: lightSize * 0.6,
-            borderRadius: (lightSize * 0.6) / 2,
-            backgroundColor: '#444',
-            margin: lightSize * 0.2,
+            width: lightSize * 0.7,
+            height: lightSize * 0.7,
+            borderRadius: (lightSize * 0.7) / 2,
+            backgroundColor: isYellow ? '#ffdd44' : '#333311',
+            margin: lightSize * 0.15,
           }}
         />
         {/* Green light */}
         <View
           style={{
-            width: lightSize * 0.6,
-            height: lightSize * 0.6,
-            borderRadius: (lightSize * 0.6) / 2,
-            backgroundColor: '#444',
-            margin: lightSize * 0.2,
+            width: lightSize * 0.7,
+            height: lightSize * 0.7,
+            borderRadius: (lightSize * 0.7) / 2,
+            backgroundColor: isGreen ? '#44ff44' : '#113311',
+            margin: lightSize * 0.15,
           }}
         />
       </View>
-    </View>
+    </>
   );
 };
 
@@ -549,10 +559,6 @@ const renderWebSurface = (
     const hasCurbLeft = isPavement && neighbors.left;
     const hasCurbRight = isPavement && neighbors.right;
     
-    // Check if this is a crosswalk (pavement between two parallel roads)
-    const isHorizontalCrosswalk = isPavement && neighbors.left && neighbors.right;
-    const isVerticalCrosswalk = isPavement && neighbors.top && neighbors.bottom;
-    
     return (
       <View
         key={`surface-${tile.x}-${tile.y}-${key}`}
@@ -570,24 +576,6 @@ const renderWebSurface = (
         {hasCurbBottom && <View style={webStyles.curbBottom} />}
         {hasCurbLeft && <View style={webStyles.curbLeft} />}
         {hasCurbRight && <View style={webStyles.curbRight} />}
-        
-        {/* Crosswalk stripes */}
-        {isHorizontalCrosswalk && (
-          <>
-            <View style={[webStyles.crosswalkStripe, { top: TILE_SIZE * 0.2 }]} />
-            <View style={[webStyles.crosswalkStripe, { top: TILE_SIZE * 0.4 }]} />
-            <View style={[webStyles.crosswalkStripe, { top: TILE_SIZE * 0.6 }]} />
-            <View style={[webStyles.crosswalkStripe, { top: TILE_SIZE * 0.8 }]} />
-          </>
-        )}
-        {isVerticalCrosswalk && (
-          <>
-            <View style={[webStyles.crosswalkStripeVertical, { left: TILE_SIZE * 0.2 }]} />
-            <View style={[webStyles.crosswalkStripeVertical, { left: TILE_SIZE * 0.4 }]} />
-            <View style={[webStyles.crosswalkStripeVertical, { left: TILE_SIZE * 0.6 }]} />
-            <View style={[webStyles.crosswalkStripeVertical, { left: TILE_SIZE * 0.8 }]} />
-          </>
-        )}
       </View>
     );
   }
@@ -611,6 +599,23 @@ const renderWebSurface = (
     const isTJunction = connectionCount === 3;
     const isCrossroads = connectionCount === 4;
     
+    // Crosswalks on straight roads that are adjacent to intersections
+    // Simple check: straight road (2 opposite connections) near complex intersections
+    const isHorizontalRoad = left && right && !top && !bottom;
+    const isVerticalRoad = top && bottom && !left && !right;
+    
+    // Crosswalk appears on straight road tiles with specific coordinates
+    // (one tile before the intersection grid lines)
+    const hasIntersectionNearby = connectionCount === 2 && (
+      (isHorizontalRoad && (tile.x + 1) % 6 === 0) ||  // One tile before vertical road
+      (isHorizontalRoad && (tile.x - 1) % 6 === 0) ||  // One tile after vertical road
+      (isVerticalRoad && (tile.y + 1) % 6 === 0) ||    // One tile before horizontal road
+      (isVerticalRoad && (tile.y - 1) % 6 === 0)       // One tile after horizontal road
+    );
+    
+    const isCrosswalkHorizontal = isHorizontalRoad && hasIntersectionNearby;
+    const isCrosswalkVertical = isVerticalRoad && hasIntersectionNearby;
+    
     const hasTrafficLight = shouldHaveTrafficLight(tile, neighbors);
     
     return (
@@ -620,21 +625,74 @@ const renderWebSurface = (
           style={[webStyles.tileBase, webStyles.road, { left: screenX, top: screenY }]}
         >
           {/* Horizontal road markings */}
-          {(isHorizontal || isCrossroads || isTJunction) && (left || right) && (
+          {isHorizontal && !isCrosswalkHorizontal && (
             <View style={webStyles.roadStripeHorizontal} />
           )}
           
           {/* Vertical road markings */}
-          {(isVertical || isCrossroads || isTJunction) && (top || bottom) && (
+          {isVertical && !isCrosswalkVertical && (
             <View style={webStyles.roadStripeVertical} />
           )}
           
-          {/* Intersection marking (center dot) */}
-          {(isCrossroads || isTJunction) && (
-            <View style={webStyles.roadIntersection} />
+          {/* Crosswalk stripes - only on straight roads before intersections, 50% width */}
+          {isCrosswalkHorizontal && (
+            <>
+              <View style={[webStyles.crosswalkStripe, { 
+                top: TILE_SIZE * 0.2, 
+                height: TILE_SIZE * 0.08,
+                left: TILE_SIZE * 0.25,
+                right: TILE_SIZE * 0.25,
+              }]} />
+              <View style={[webStyles.crosswalkStripe, { 
+                top: TILE_SIZE * 0.4, 
+                height: TILE_SIZE * 0.08,
+                left: TILE_SIZE * 0.25,
+                right: TILE_SIZE * 0.25,
+              }]} />
+              <View style={[webStyles.crosswalkStripe, { 
+                top: TILE_SIZE * 0.6, 
+                height: TILE_SIZE * 0.08,
+                left: TILE_SIZE * 0.25,
+                right: TILE_SIZE * 0.25,
+              }]} />
+              <View style={[webStyles.crosswalkStripe, { 
+                top: TILE_SIZE * 0.8, 
+                height: TILE_SIZE * 0.08,
+                left: TILE_SIZE * 0.25,
+                right: TILE_SIZE * 0.25,
+              }]} />
+            </>
+          )}
+          {isCrosswalkVertical && (
+            <>
+              <View style={[webStyles.crosswalkStripeVertical, { 
+                left: TILE_SIZE * 0.2, 
+                width: TILE_SIZE * 0.08,
+                top: TILE_SIZE * 0.25,
+                bottom: TILE_SIZE * 0.25,
+              }]} />
+              <View style={[webStyles.crosswalkStripeVertical, { 
+                left: TILE_SIZE * 0.4, 
+                width: TILE_SIZE * 0.08,
+                top: TILE_SIZE * 0.25,
+                bottom: TILE_SIZE * 0.25,
+              }]} />
+              <View style={[webStyles.crosswalkStripeVertical, { 
+                left: TILE_SIZE * 0.6, 
+                width: TILE_SIZE * 0.08,
+                top: TILE_SIZE * 0.25,
+                bottom: TILE_SIZE * 0.25,
+              }]} />
+              <View style={[webStyles.crosswalkStripeVertical, { 
+                left: TILE_SIZE * 0.8, 
+                width: TILE_SIZE * 0.08,
+                top: TILE_SIZE * 0.25,
+                bottom: TILE_SIZE * 0.25,
+              }]} />
+            </>
           )}
           
-          {/* Corner markings - add subtle corner lines */}
+          {/* Corner markings */}
           {isCorner && left && top && (
             <View style={webStyles.roadCornerNW} />
           )}
@@ -647,10 +705,25 @@ const renderWebSurface = (
           {isCorner && right && bottom && (
             <View style={webStyles.roadCornerSE} />
           )}
+          
+          {/* Traffic lights at major intersections - fixed position within tile */}
+          {hasTrafficLight && (
+            <>
+              <View style={{ position: 'absolute', right: 5, top: 5 }}>
+                {renderTrafficLight(tile.x, tile.y, 0)}
+              </View>
+              <View style={{ position: 'absolute', left: 5, top: 5 }}>
+                {renderTrafficLight(tile.x, tile.y, 1)}
+              </View>
+              <View style={{ position: 'absolute', left: 5, bottom: 5 }}>
+                {renderTrafficLight(tile.x, tile.y, 2)}
+              </View>
+              <View style={{ position: 'absolute', right: 5, bottom: 5 }}>
+                {renderTrafficLight(tile.x, tile.y, 3)}
+              </View>
+            </>
+          )}
         </View>
-        
-        {/* Traffic light at major intersections */}
-        {hasTrafficLight && renderTrafficLight(screenX, screenY, key)}
       </React.Fragment>
     );
   }
@@ -941,16 +1014,16 @@ const webStyles = StyleSheet.create({
   },
   roadStripeHorizontal: {
     position: 'absolute',
-    left: TILE_SIZE * 0.1,
-    width: TILE_SIZE * 0.8,
+    left: TILE_SIZE * 0.25,
+    width: TILE_SIZE * 0.5,
     top: TILE_SIZE / 2 - 1,
     height: 2,
     backgroundColor: '#e0c030',
   },
   roadStripeVertical: {
     position: 'absolute',
-    top: TILE_SIZE * 0.1,
-    height: TILE_SIZE * 0.8,
+    top: TILE_SIZE * 0.25,
+    height: TILE_SIZE * 0.5,
     left: TILE_SIZE / 2 - 1,
     width: 2,
     backgroundColor: '#e0c030',
@@ -966,47 +1039,47 @@ const webStyles = StyleSheet.create({
   },
   roadCornerNW: {
     position: 'absolute',
-    left: TILE_SIZE * 0.15,
-    top: TILE_SIZE * 0.15,
-    width: TILE_SIZE * 0.35,
-    height: TILE_SIZE * 0.35,
-    borderLeftWidth: 2,
-    borderTopWidth: 2,
+    right: TILE_SIZE * 0.375,
+    bottom: TILE_SIZE * 0.375,
+    width: TILE_SIZE * 0.25,
+    height: TILE_SIZE * 0.25,
+    borderRightWidth: 2,
+    borderBottomWidth: 2,
     borderColor: '#e0c030',
-    borderTopLeftRadius: TILE_SIZE * 0.2,
+    borderBottomRightRadius: TILE_SIZE * 0.15,
   },
   roadCornerNE: {
     position: 'absolute',
-    right: TILE_SIZE * 0.15,
-    top: TILE_SIZE * 0.15,
-    width: TILE_SIZE * 0.35,
-    height: TILE_SIZE * 0.35,
-    borderRightWidth: 2,
-    borderTopWidth: 2,
-    borderColor: '#e0c030',
-    borderTopRightRadius: TILE_SIZE * 0.2,
-  },
-  roadCornerSW: {
-    position: 'absolute',
-    left: TILE_SIZE * 0.15,
-    bottom: TILE_SIZE * 0.15,
-    width: TILE_SIZE * 0.35,
-    height: TILE_SIZE * 0.35,
+    left: TILE_SIZE * 0.375,
+    bottom: TILE_SIZE * 0.375,
+    width: TILE_SIZE * 0.25,
+    height: TILE_SIZE * 0.25,
     borderLeftWidth: 2,
     borderBottomWidth: 2,
     borderColor: '#e0c030',
-    borderBottomLeftRadius: TILE_SIZE * 0.2,
+    borderBottomLeftRadius: TILE_SIZE * 0.15,
+  },
+  roadCornerSW: {
+    position: 'absolute',
+    right: TILE_SIZE * 0.375,
+    top: TILE_SIZE * 0.375,
+    width: TILE_SIZE * 0.25,
+    height: TILE_SIZE * 0.25,
+    borderRightWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#e0c030',
+    borderTopRightRadius: TILE_SIZE * 0.15,
   },
   roadCornerSE: {
     position: 'absolute',
-    right: TILE_SIZE * 0.15,
-    bottom: TILE_SIZE * 0.15,
-    width: TILE_SIZE * 0.35,
-    height: TILE_SIZE * 0.35,
-    borderRightWidth: 2,
-    borderBottomWidth: 2,
+    left: TILE_SIZE * 0.375,
+    top: TILE_SIZE * 0.375,
+    width: TILE_SIZE * 0.25,
+    height: TILE_SIZE * 0.25,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
     borderColor: '#e0c030',
-    borderBottomRightRadius: TILE_SIZE * 0.2,
+    borderTopLeftRadius: TILE_SIZE * 0.15,
   },
   coin: {
     position: 'absolute',
