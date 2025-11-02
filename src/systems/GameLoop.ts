@@ -1,0 +1,96 @@
+import { GameState, Vector2 } from '../types/Game';
+import { createPlayer, updatePlayer } from '../entities/Player';
+import { createCamera, updateCamera } from './Camera';
+import { generateCityMap } from '../utils/CityMap';
+import { TILE_SIZE } from '../utils/Isometric';
+
+export class GameLoop {
+  private gameState: GameState;
+  private input: Vector2 = { x: 0, y: 0 };
+  private screenWidth: number = 0;
+  private screenHeight: number = 0;
+  private animationFrameId: number | null = null;
+  private lastTime: number = 0;
+  private onUpdate: (state: GameState) => void;
+
+  constructor(onUpdate: (state: GameState) => void) {
+    this.onUpdate = onUpdate;
+    // Generate city map (30x30 tiles for a bigger city)
+    const tiles = generateCityMap(30, 30);
+    
+    // Start player in center of map in world coordinates
+    const startTileX = 15;
+    const startTileY = 15;
+    const startWorldX = startTileX * TILE_SIZE + TILE_SIZE / 2;
+    const startWorldY = startTileY * TILE_SIZE + TILE_SIZE / 2;
+    
+    this.gameState = {
+      player: createPlayer(startWorldX, startWorldY),
+      camera: createCamera(startWorldX, startWorldY),
+      entities: [],
+      tiles,
+      lastUpdate: 0,
+    };
+  }
+
+  setScreenSize(width: number, height: number) {
+    this.screenWidth = width;
+    this.screenHeight = height;
+  }
+
+  setInput(input: Vector2) {
+    this.input = { x: input.x, y: input.y };
+  }
+
+  start() {
+    this.lastTime = performance.now();
+    this.update();
+  }
+
+  stop() {
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+  }
+
+  private update = () => {
+    const currentTime = performance.now();
+    const deltaTime = (currentTime - this.lastTime) / 1000; // Convert to seconds
+    this.lastTime = currentTime;
+
+    // Update player (returns new player object)
+    const updatedPlayer = updatePlayer(
+      this.gameState.player,
+      this.input,
+      deltaTime
+    );
+    
+    // Update camera (returns new camera object)
+    const updatedCamera = updateCamera(
+      this.gameState.camera,
+      updatedPlayer.position,
+      this.screenWidth,
+      this.screenHeight,
+      deltaTime
+    );
+
+    // Create new game state object (immutable update for React)
+    this.gameState = {
+      ...this.gameState,
+      player: updatedPlayer,
+      camera: updatedCamera,
+      lastUpdate: currentTime,
+    };
+
+    // Call update callback with NEW game state
+    this.onUpdate(this.gameState);
+
+    // Schedule next frame
+    this.animationFrameId = requestAnimationFrame(this.update);
+  };
+
+  getState(): GameState {
+    return this.gameState;
+  }
+}
