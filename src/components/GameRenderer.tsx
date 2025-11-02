@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Canvas, Circle, Group } from '@shopify/react-native-skia';
-import { GameState, Tile, Collectible } from '../types/Game';
+import { GameState, Tile, Collectible, NPC } from '../types/Game';
 import { IsometricGrass } from './IsometricGrass';
 import { IsometricRoad, RoadNeighbors } from './IsometricRoad';
 import { IsometricBuilding } from './IsometricBuilding';
@@ -29,10 +29,18 @@ interface ProjectedCoin {
   depth: number;
 }
 
+interface ProjectedNPC {
+  npc: NPC;
+  screenX: number;
+  screenY: number;
+  radius: number;
+}
+
 interface ProjectedScene {
   tiles: ProjectedTile[];
   playerScreenPos: { x: number; y: number };
   coins: ProjectedCoin[];
+  npcs: ProjectedNPC[];
 }
 
 const CULL_MARGIN = TILE_SIZE * 2;
@@ -49,7 +57,7 @@ const useProjectedScene = (
   width: number,
   height: number
 ): ProjectedScene => {
-  const { player, tiles, collectibles } = gameState;
+  const { player, tiles, collectibles, npcs } = gameState;
   const playerX = player.position.x;
   const playerY = player.position.y;
 
@@ -69,6 +77,7 @@ const useProjectedScene = (
 
     const projectedTiles: ProjectedTile[] = [];
     const projectedCoins: ProjectedCoin[] = [];
+    const projectedNPCs: ProjectedNPC[] = [];
 
     for (const tile of tiles) {
       const worldPos = { x: tile.x * TILE_SIZE, y: tile.y * TILE_SIZE, z: 0 };
@@ -155,15 +164,36 @@ const useProjectedScene = (
       y: halfHeight,
     };
 
-    const playerDepth =
-      playerCenterX / TILE_SIZE + playerCenterY / TILE_SIZE;
+    for (const npc of npcs) {
+      const iso = worldToIsometric({ x: npc.position.x, y: npc.position.y, z: 0 });
+      const screenX = iso.x - playerIso.x + halfWidth;
+      const screenY = iso.y - playerIso.y + halfHeight;
+      const radius = npc.size / 2;
+
+      if (
+        screenX + radius < -CULL_MARGIN ||
+        screenX - radius > width + CULL_MARGIN ||
+        screenY + radius < -CULL_MARGIN ||
+        screenY - radius > height + CULL_MARGIN
+      ) {
+        continue;
+      }
+
+      projectedNPCs.push({
+        npc,
+        screenX,
+        screenY,
+        radius,
+      });
+    }
 
     return {
       tiles: projectedTiles,
       playerScreenPos,
       coins: projectedCoins,
+      npcs: projectedNPCs,
     };
-  }, [tiles, collectibles, playerX, playerY, width, height]);
+  }, [tiles, collectibles, npcs, playerX, playerY, width, height]);
 };
 
 export const GameRenderer: React.FC<GameRendererProps> = (props) => {
@@ -177,11 +207,13 @@ type RenderItem =
   | { kind: 'surface'; depth: number; tile: ProjectedTile }
   | { kind: 'building'; depth: number; tile: ProjectedTile }
   | { kind: 'coin'; depth: number; coin: ProjectedCoin }
+  | { kind: 'npc'; depth: number; npc: ProjectedNPC }
   | { kind: 'player'; depth: number };
 
 const buildRenderQueue = (
   tiles: ProjectedTile[],
   coins: ProjectedCoin[],
+  npcs: ProjectedNPC[],
   playerScreenY: number
 ): RenderItem[] => {
   const queue: RenderItem[] = [];
@@ -197,6 +229,10 @@ const buildRenderQueue = (
     queue.push({ kind: 'coin', depth: coin.screenY - coin.coin.radius, coin });
   }
 
+  for (const npc of npcs) {
+    queue.push({ kind: 'npc', depth: npc.screenY, npc });
+  }
+
   queue.push({ kind: 'player', depth: playerScreenY });
 
   queue.sort((a, b) => a.depth - b.depth);
@@ -209,15 +245,15 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, coins, playerScreenPos } = useProjectedScene(
+  const { tiles, coins, npcs, playerScreenPos } = useProjectedScene(
     gameState,
     width,
     height
   );
 
   const renderQueue = useMemo(
-    () => buildRenderQueue(tiles, coins, playerScreenPos.y),
-    [tiles, coins, playerScreenPos.y]
+    () => buildRenderQueue(tiles, coins, npcs, playerScreenPos.y),
+    [tiles, coins, npcs, playerScreenPos.y]
   );
 
   return (
@@ -261,11 +297,11 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
                 />
               );
             }
-            case 'coin': {
-              const { coin, screenX, screenY } = item.coin;
-              return (
-                <Group key={`coin-${coin.id}-${index}`}>
-                  <Circle cx={screenX} cy={screenY} r={coin.radius} color={COIN_COLOR} />
+          case 'coin': {
+            const { coin, screenX, screenY } = item.coin;
+            return (
+              <Group key={`coin-${coin.id}-${index}`}>
+                <Circle cx={screenX} cy={screenY} r={coin.radius} color={COIN_COLOR} />
                   <Circle
                     cx={screenX}
                     cy={screenY}
@@ -281,6 +317,18 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
                     color={COIN_HIGHLIGHT}
                   />
                 </Group>
+              );
+            }
+            case 'npc': {
+              const { npc, screenX, screenY, radius } = item.npc;
+              return (
+                <Circle
+                  key={`npc-${npc.id}-${index}`}
+                  cx={screenX}
+                  cy={screenY}
+                  r={radius}
+                  color={npc.color}
+                />
               );
             }
             case 'player':
@@ -306,15 +354,15 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, coins, playerScreenPos } = useProjectedScene(
+  const { tiles, coins, npcs, playerScreenPos } = useProjectedScene(
     gameState,
     width,
     height
   );
 
   const renderQueue = useMemo(
-    () => buildRenderQueue(tiles, coins, playerScreenPos.y),
-    [tiles, coins, playerScreenPos.y]
+    () => buildRenderQueue(tiles, coins, npcs, playerScreenPos.y),
+    [tiles, coins, npcs, playerScreenPos.y]
   );
 
   return (
@@ -332,6 +380,10 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
           case 'coin': {
             const { coin, screenX, screenY } = item.coin;
             return renderWebCoin(coin, screenX, screenY, index);
+          }
+          case 'npc': {
+            const { npc, screenX, screenY, radius } = item.npc;
+            return renderWebNPC(npc, screenX, screenY, radius, index);
           }
           case 'player':
             return (
@@ -489,6 +541,23 @@ const renderWebCoin = (coin: Collectible, screenX: number, screenY: number, key:
       ]}
     />
   </View>
+);
+
+const renderWebNPC = (npc: NPC, screenX: number, screenY: number, radius: number, key: number) => (
+  <View
+    key={`npc-${npc.id}-${key}`}
+    style={{
+      position: 'absolute',
+      left: screenX - radius,
+      top: screenY - radius,
+      width: radius * 2,
+      height: radius * 2,
+      borderRadius: radius,
+      backgroundColor: npc.color,
+      borderWidth: 1,
+      borderColor: 'rgba(0,0,0,0.25)',
+    }}
+  />
 );
 
 const webStyles = StyleSheet.create({

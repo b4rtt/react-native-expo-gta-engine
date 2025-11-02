@@ -29,6 +29,12 @@ export interface Entity {
   size: number;
 }
 
+export interface NPC extends Entity {
+  target: Vector2;
+  color: string;
+  behavior: 'wander';
+}
+
 export interface Collectible {
   id: string;
   type: CollectibleType;
@@ -72,6 +78,7 @@ export interface GameState {
   player: Player;
   camera: Camera;
   entities: Entity[];
+  npcs: NPC[];
   tiles: Tile[];
   collectibles: Collectible[];
   stats: GameStats;
