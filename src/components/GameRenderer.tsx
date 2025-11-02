@@ -31,7 +31,6 @@ interface ProjectedCoin {
 interface ProjectedScene {
   tiles: ProjectedTile[];
   playerScreenPos: { x: number; y: number };
-  playerDepth: number;
   coins: ProjectedCoin[];
 }
 
@@ -162,7 +161,6 @@ const useProjectedScene = (
     return {
       tiles: projectedTiles,
       playerScreenPos,
-      playerDepth,
       coins: projectedCoins,
     };
   }, [tiles, collectibles, playerX, playerY, width, height]);
@@ -184,22 +182,22 @@ type RenderItem =
 const buildRenderQueue = (
   tiles: ProjectedTile[],
   coins: ProjectedCoin[],
-  playerDepth: number
+  playerScreenY: number
 ): RenderItem[] => {
   const queue: RenderItem[] = [];
 
   for (const tile of tiles) {
-    queue.push({ kind: 'surface', depth: tile.depth, tile });
+    queue.push({ kind: 'surface', depth: tile.screenY - TILE_SIZE, tile });
     if (tile.tile.type === 'building') {
-      queue.push({ kind: 'building', depth: tile.depth + 0.6, tile });
+      queue.push({ kind: 'building', depth: tile.screenY + TILE_SIZE * 0.75, tile });
     }
   }
 
   for (const coin of coins) {
-    queue.push({ kind: 'coin', depth: coin.depth + 0.3, coin });
+    queue.push({ kind: 'coin', depth: coin.screenY - coin.coin.radius, coin });
   }
 
-  queue.push({ kind: 'player', depth: playerDepth + 0.5 });
+  queue.push({ kind: 'player', depth: playerScreenY });
 
   queue.sort((a, b) => a.depth - b.depth);
   return queue;
@@ -211,15 +209,15 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, coins, playerScreenPos, playerDepth } = useProjectedScene(
+  const { tiles, coins, playerScreenPos } = useProjectedScene(
     gameState,
     width,
     height
   );
 
   const renderQueue = useMemo(
-    () => buildRenderQueue(tiles, coins, playerDepth),
-    [tiles, coins, playerDepth]
+    () => buildRenderQueue(tiles, coins, playerScreenPos.y),
+    [tiles, coins, playerScreenPos.y]
   );
 
   return (
@@ -308,15 +306,15 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, coins, playerScreenPos, playerDepth } = useProjectedScene(
+  const { tiles, coins, playerScreenPos } = useProjectedScene(
     gameState,
     width,
     height
   );
 
   const renderQueue = useMemo(
-    () => buildRenderQueue(tiles, coins, playerDepth),
-    [tiles, coins, playerDepth]
+    () => buildRenderQueue(tiles, coins, playerScreenPos.y),
+    [tiles, coins, playerScreenPos.y]
   );
 
   return (
@@ -514,6 +512,8 @@ const webStyles = StyleSheet.create({
     width: TILE_SIZE,
     height: TILE_SIZE,
   },
+  grass: {},
+  pavement: {},
   road: {
     backgroundColor: '#2a2a2a',
   },
