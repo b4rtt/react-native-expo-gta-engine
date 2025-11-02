@@ -1,9 +1,24 @@
-import { Tile, TileType } from '../types/Game';
+import { Tile, TileType, RoadConnection } from '../types/Game';
 
 /**
  * Generate a GTA 2-style city map with buildings and road grid
  */
 const BLOCK_SIZE = 5;
+
+const isRoad = (x: number, y: number): boolean => {
+  const isRoadX = x % BLOCK_SIZE === 0;
+  const isRoadY = y % BLOCK_SIZE === 0;
+  return isRoadX || isRoadY;
+};
+
+const getRoadConnections = (x: number, y: number): RoadConnection => {
+  return {
+    north: isRoad(x, y - 1),
+    south: isRoad(x, y + 1),
+    east: isRoad(x + 1, y),
+    west: isRoad(x - 1, y),
+  };
+};
 
 export const generateCityMap = (width: number, height: number): Tile[] => {
   const tiles: Tile[] = [];
@@ -14,10 +29,7 @@ export const generateCityMap = (width: number, height: number): Tile[] => {
       let type: TileType = 'grass';
       
       // Create roads in a grid pattern (every 5th tile)
-      const isRoadX = x % BLOCK_SIZE === 0;
-      const isRoadY = y % BLOCK_SIZE === 0;
-      
-      if (isRoadX || isRoadY) {
+      if (isRoad(x, y)) {
         type = 'road';
       }
 
@@ -29,6 +41,22 @@ export const generateCityMap = (width: number, height: number): Tile[] => {
           y % BLOCK_SIZE === 1 || y % BLOCK_SIZE === BLOCK_SIZE - 1;
         if (isPavementX || isPavementY) {
           type = 'pavement';
+        }
+      }
+      
+      // Add occasional alleyways (narrow roads between blocks)
+      if (type === 'pavement') {
+        const blockX = x % BLOCK_SIZE;
+        const blockY = y % BLOCK_SIZE;
+        const seed = x * 73 + y * 37;
+        
+        // Vertical alley
+        if (blockX === 2 && seed % 7 === 0) {
+          type = 'road';
+        }
+        // Horizontal alley
+        if (blockY === 2 && seed % 8 === 0) {
+          type = 'road';
         }
       }
       
@@ -59,11 +87,18 @@ export const generateCityMap = (width: number, height: number): Tile[] => {
         }
       }
       
-      tiles.push({
+      // Add road connection metadata for roads
+      const tile: Tile = {
         x,
         y,
         type,
-      });
+      };
+      
+      if (type === 'road') {
+        tile.roadConnections = getRoadConnections(x, y);
+      }
+      
+      tiles.push(tile);
     }
   }
 

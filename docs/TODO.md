@@ -6,20 +6,20 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [x] Lock the camera so the player sprite remains exactly at screen center on every frame (audit `GameRenderer` + `updateCamera` behaviour during resizing).
 - [x] Implement solid collision for buildings, road edges, and props (axis-aligned grid colliders first, then expand to per-tile flags).
 - [x] Add collectible coins/loot that spawn across the city, update HUD counters, and respawn logically.
-- [ ] Introduce NPC pedestrians with simple wandering AI and collision avoidance.
+- [x] Introduce NPC pedestrians with simple wandering AI and collision avoidance.
 - [ ] Support entering/exiting vehicles: parked car entities, state transition to driving mode, and vehicle handling model.
 
 ## Controls & UI
 - [x] Rework the virtual joystick visuals and responsiveness; provide optional keyboard mapping on web.
 - [x] Add an on-screen GTA-style HUD (health, cash, minimap placeholder, wanted stars stub).
 - [x] Add a weapon quick-select HUD with tap cycling and iconography placeholder.
-- [ ] Build a pause menu with resume/settings/exit and wire it into the game loop.
+- [x] Build a pause menu with resume/settings/exit and wire it into the game loop.
 - [ ] Create a main menu scene with start game / options / credits flow.
 
 ## World Building
-- [ ] Expand road generator to include corners, T-junctions, roundabouts, and alleyways (new tile metadata + renderer support).
-- [ ] Add sidewalks/curbs variation, crosswalks at intersections, and traffic lights props.
-- [ ] Scatter vegetation and street furniture (trees, lamp posts, trash bins, benches) with deterministic seeding.
+- [x] Expand road generator to include corners, T-junctions, roundabouts, and alleyways (new tile metadata + renderer support).
+- [x] Add sidewalks/curbs variation, crosswalks at intersections, and traffic lights props.
+- [x] Scatter vegetation and street furniture (trees, lamp posts, trash bins, benches) with deterministic seeding.
 - [ ] Improve building extrusion to show façades, roof details, rooftop props, and per-height color ramps.
 - [ ] Introduce water tiles (rivers/canals) and bridges connecting blocks.
 

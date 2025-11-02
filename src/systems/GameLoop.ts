@@ -1,126 +1,12 @@
-import { GameState, Vector2, WeaponId, NPC, Tile, TileType } from '../types/Game';
+import { GameState, Vector2, WeaponId } from '../types/Game';
 import { createPlayer, updatePlayer } from '../entities/Player';
 import { createCamera, updateCamera } from './Camera';
 import { generateCityMap } from '../utils/CityMap';
-import { TILE_SIZE } from '../utils/Isometric';
 import { buildTileLookup, TileLookup } from '../utils/TileLookup';
-import { add, multiply, normalize, length } from '../utils/Math';
 import { generateCoins, resolveCoinCollection } from '../utils/Collectibles';
-
-const NPC_COUNT = 12;
-const NPC_SPEED = 70;
-const NPC_COLORS = ['#f07167', '#6a994e', '#4d96ff', '#ffb703', '#8338ec', '#ff6f91'];
-const WALKABLE_TILE_TYPES: TileType[] = ['pavement', 'grass'];
-
-const randomElement = <T,>(items: T[]): T => items[Math.floor(Math.random() * items.length)];
-
-const tileCenter = (tile: Tile): Vector2 => ({
-  x: tile.x * TILE_SIZE + TILE_SIZE / 2,
-  y: tile.y * TILE_SIZE + TILE_SIZE / 2,
-});
-
-const isBlockingTileType = (type?: TileType): boolean => type === 'building';
-
-const collidesWithBlocking = (position: Vector2, radius: number, lookup: TileLookup): boolean => {
-  const offsets = [
-    { x: radius, y: 0 },
-    { x: -radius, y: 0 },
-    { x: 0, y: radius },
-    { x: 0, y: -radius },
-    { x: 0, y: 0 },
-  ];
-
-  for (const offset of offsets) {
-    const sampleX = position.x + offset.x;
-    const sampleY = position.y + offset.y;
-    const tileX = Math.floor(sampleX / TILE_SIZE);
-    const tileY = Math.floor(sampleY / TILE_SIZE);
-    const tile = lookup.get(`${tileX},${tileY}`);
-    if (isBlockingTileType(tile?.type)) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
-const pickRandomTarget = (walkableTiles: Tile[]): Vector2 => {
-  const tile = randomElement(walkableTiles);
-  return tileCenter(tile);
-};
-
-const createNPCs = (walkableTiles: Tile[]): NPC[] => {
-  if (walkableTiles.length === 0) {
-    return [];
-  }
-
-  return Array.from({ length: NPC_COUNT }).map((_, index) => {
-    const spawnTile = randomElement(walkableTiles);
-    const spawnPosition = tileCenter(spawnTile);
-    return {
-      id: `npc-${index}`,
-      position: spawnPosition,
-      rotation: 0,
-      speed: 0,
-      size: 26,
-      target: pickRandomTarget(walkableTiles),
-      color: NPC_COLORS[index % NPC_COLORS.length],
-      behavior: 'wander' as const,
-    };
-  });
-};
-
-const updateNPCs = (
-  npcs: NPC[],
-  playerPosition: Vector2,
-  tileLookup: TileLookup,
-  deltaTime: number,
-  walkableTiles: Tile[]
-): NPC[] => {
-  if (walkableTiles.length === 0) {
-    return npcs;
-  }
-
-  return npcs.map((npc) => {
-    let target = npc.target;
-    const toTarget = {
-      x: target.x - npc.position.x,
-      y: target.y - npc.position.y,
-    };
-    const distanceToTarget = length(toTarget);
-
-    if (distanceToTarget < TILE_SIZE * 0.35) {
-      target = pickRandomTarget(walkableTiles);
-    }
-
-    const direction = distanceToTarget > 0 ? normalize(toTarget) : { x: 0, y: 0 };
-    const desiredVelocity = multiply(direction, NPC_SPEED);
-    const proposedPosition = add(npc.position, multiply(desiredVelocity, deltaTime));
-    const radius = npc.size / 2;
-
-    let finalPosition = proposedPosition;
-    if (collidesWithBlocking(proposedPosition, radius, tileLookup)) {
-      target = pickRandomTarget(walkableTiles);
-      finalPosition = npc.position;
-    }
-
-    const toPlayer = {
-      x: finalPosition.x - playerPosition.x,
-      y: finalPosition.y - playerPosition.y,
-    };
-    if (length(toPlayer) < TILE_SIZE * 0.6) {
-      target = pickRandomTarget(walkableTiles);
-      finalPosition = npc.position;
-    }
-
-    return {
-      ...npc,
-      position: finalPosition,
-      target,
-      speed: length(desiredVelocity),
-    };
-  });
-};
+import { spawnNPCsInCity, updateNPC } from '../entities/NPC';
+import { generateProps } from '../utils/Props';
+import { TILE_SIZE } from '../utils/Isometric';
 
 export class GameLoop {
   private gameState: GameState;
@@ -131,15 +17,14 @@ export class GameLoop {
   private lastTime: number = 0;
   private onUpdate: (state: GameState) => void;
   private tileLookup: TileLookup;
-  private npcWalkableTiles: Tile[];
 
   constructor(onUpdate: (state: GameState) => void) {
     this.onUpdate = onUpdate;
     // Generate city map (30x30 tiles for a bigger city)
     const tiles = generateCityMap(30, 30);
     this.tileLookup = buildTileLookup(tiles);
-    this.npcWalkableTiles = tiles.filter(tile => WALKABLE_TILE_TYPES.includes(tile.type));
     const collectibles = generateCoins(tiles);
+    const props = generateProps(tiles);
     const weapons: WeaponId[] = ['fist', 'pistol', 'knife', 'bat'];
     
     // Start player in center of map in world coordinates
@@ -148,12 +33,16 @@ export class GameLoop {
     const startWorldX = startTileX * TILE_SIZE + TILE_SIZE / 2;
     const startWorldY = startTileY * TILE_SIZE + TILE_SIZE / 2;
     
+    // Spawn NPCs across the city
+    const npcs = spawnNPCsInCity(30, TILE_SIZE, 15, this.tileLookup);
+    
     this.gameState = {
       player: createPlayer(startWorldX, startWorldY),
       camera: createCamera(startWorldX, startWorldY),
       entities: [],
       tiles,
       collectibles,
+      props,
       stats: {
         coinsCollected: 0,
         cash: 0,
@@ -163,8 +52,9 @@ export class GameLoop {
       },
       weapons,
       selectedWeapon: weapons[0],
-      npcs: createNPCs(this.npcWalkableTiles),
+      npcs,
       lastUpdate: 0,
+      isPaused: false,
     };
   }
 
@@ -194,6 +84,42 @@ export class GameLoop {
     this.onUpdate(this.gameState);
   }
 
+  pause() {
+    if (this.gameState.isPaused) {
+      return;
+    }
+
+    this.gameState = {
+      ...this.gameState,
+      isPaused: true,
+    };
+
+    this.onUpdate(this.gameState);
+  }
+
+  unpause() {
+    if (!this.gameState.isPaused) {
+      return;
+    }
+
+    this.gameState = {
+      ...this.gameState,
+      isPaused: false,
+    };
+
+    // Reset lastTime to prevent large delta time after unpause
+    this.lastTime = performance.now();
+    this.onUpdate(this.gameState);
+  }
+
+  togglePause() {
+    if (this.gameState.isPaused) {
+      this.unpause();
+    } else {
+      this.pause();
+    }
+  }
+
   start() {
     this.lastTime = performance.now();
     this.update();
@@ -208,6 +134,14 @@ export class GameLoop {
 
   private update = () => {
     const currentTime = performance.now();
+    
+    // If paused, don't update game logic, just schedule next frame
+    if (this.gameState.isPaused) {
+      this.lastTime = currentTime; // Keep time updated to prevent delta time jump
+      this.animationFrameId = requestAnimationFrame(this.update);
+      return;
+    }
+
     const deltaTime = (currentTime - this.lastTime) / 1000; // Convert to seconds
     this.lastTime = currentTime;
 
@@ -219,12 +153,15 @@ export class GameLoop {
       this.tileLookup
     );
 
-    const updatedNPCs = updateNPCs(
-      this.gameState.npcs,
-      updatedPlayer.position,
-      this.tileLookup,
-      deltaTime,
-      this.npcWalkableTiles
+    // Update each NPC individually with improved collision avoidance
+    const updatedNPCs = this.gameState.npcs.map((npc) =>
+      updateNPC(
+        npc,
+        deltaTime,
+        this.tileLookup,
+        updatedPlayer.position,
+        this.gameState.npcs
+      )
     );
 
     const {

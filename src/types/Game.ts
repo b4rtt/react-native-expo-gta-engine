@@ -11,14 +11,31 @@ export interface Vector3 {
 
 export type TileType = 'grass' | 'pavement' | 'road' | 'building';
 
+export type RoadConnection = {
+  north: boolean;
+  south: boolean;
+  east: boolean;
+  west: boolean;
+};
+
 export type CollectibleType = 'coin';
 export type WeaponId = 'fist' | 'pistol' | 'knife' | 'bat';
+export type PropType = 'tree' | 'lamp-post' | 'bench' | 'trash-bin';
+
+export interface Prop {
+  id: string;
+  type: PropType;
+  position: Vector2;
+  rotation: number;
+  size: number;
+}
 
 export interface Tile {
   x: number;
   y: number;
   type: TileType;
   buildingHeight?: number; // For buildings
+  roadConnections?: RoadConnection; // For roads - which directions connect
 }
 
 export interface Entity {
@@ -81,8 +98,10 @@ export interface GameState {
   npcs: NPC[];
   tiles: Tile[];
   collectibles: Collectible[];
+  props: Prop[];
   stats: GameStats;
   weapons: WeaponId[];
   selectedWeapon: WeaponId;
   lastUpdate: number;
+  isPaused: boolean;
 }

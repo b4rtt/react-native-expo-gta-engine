@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Canvas, Circle, Group } from '@shopify/react-native-skia';
-import { GameState, Tile, Collectible, NPC } from '../types/Game';
+import { GameState, Tile, Collectible, NPC, Prop } from '../types/Game';
 import { IsometricGrass } from './IsometricGrass';
 import { IsometricRoad, RoadNeighbors } from './IsometricRoad';
 import { IsometricBuilding } from './IsometricBuilding';
@@ -36,11 +36,19 @@ interface ProjectedNPC {
   radius: number;
 }
 
+interface ProjectedProp {
+  prop: Prop;
+  screenX: number;
+  screenY: number;
+  depth: number;
+}
+
 interface ProjectedScene {
   tiles: ProjectedTile[];
   playerScreenPos: { x: number; y: number };
   coins: ProjectedCoin[];
   npcs: ProjectedNPC[];
+  props: ProjectedProp[];
 }
 
 const CULL_MARGIN = TILE_SIZE * 2;
@@ -57,7 +65,7 @@ const useProjectedScene = (
   width: number,
   height: number
 ): ProjectedScene => {
-  const { player, tiles, collectibles, npcs } = gameState;
+  const { player, tiles, collectibles, npcs, props } = gameState;
   const playerX = player.position.x;
   const playerY = player.position.y;
 
@@ -94,15 +102,13 @@ const useProjectedScene = (
         continue;
       }
 
-      const neighbors: RoadNeighbors =
-        tile.type === 'road'
-          ? {
-              left: roadSet.has(tileKey(tile.x - 1, tile.y)),
-              right: roadSet.has(tileKey(tile.x + 1, tile.y)),
-              top: roadSet.has(tileKey(tile.x, tile.y - 1)),
-              bottom: roadSet.has(tileKey(tile.x, tile.y + 1)),
-            }
-          : { left: false, right: false, top: false, bottom: false };
+      // Check for road neighbors for both road and pavement tiles
+      const neighbors: RoadNeighbors = {
+        left: roadSet.has(tileKey(tile.x - 1, tile.y)),
+        right: roadSet.has(tileKey(tile.x + 1, tile.y)),
+        top: roadSet.has(tileKey(tile.x, tile.y - 1)),
+        bottom: roadSet.has(tileKey(tile.x, tile.y + 1)),
+      };
 
       projectedTiles.push({
         tile,
@@ -187,13 +193,37 @@ const useProjectedScene = (
       });
     }
 
+    const projectedProps: ProjectedProp[] = [];
+    for (const prop of props) {
+      const iso = worldToIsometric({ x: prop.position.x, y: prop.position.y, z: 0 });
+      const screenX = iso.x - playerIso.x + halfWidth;
+      const screenY = iso.y - playerIso.y + halfHeight;
+
+      if (
+        screenX + prop.size < -CULL_MARGIN ||
+        screenX - prop.size > width + CULL_MARGIN ||
+        screenY + prop.size < -CULL_MARGIN ||
+        screenY - prop.size > height + CULL_MARGIN
+      ) {
+        continue;
+      }
+
+      projectedProps.push({
+        prop,
+        screenX,
+        screenY,
+        depth: prop.position.x + prop.position.y,
+      });
+    }
+
     return {
       tiles: projectedTiles,
       playerScreenPos,
       coins: projectedCoins,
       npcs: projectedNPCs,
+      props: projectedProps,
     };
-  }, [tiles, collectibles, npcs, playerX, playerY, width, height]);
+  }, [tiles, collectibles, npcs, props, playerX, playerY, width, height]);
 };
 
 export const GameRenderer: React.FC<GameRendererProps> = (props) => {
@@ -208,12 +238,14 @@ type RenderItem =
   | { kind: 'building'; depth: number; tile: ProjectedTile }
   | { kind: 'coin'; depth: number; coin: ProjectedCoin }
   | { kind: 'npc'; depth: number; npc: ProjectedNPC }
+  | { kind: 'prop'; depth: number; prop: ProjectedProp }
   | { kind: 'player'; depth: number };
 
 const buildRenderQueue = (
   tiles: ProjectedTile[],
   coins: ProjectedCoin[],
   npcs: ProjectedNPC[],
+  props: ProjectedProp[],
   playerScreenY: number
 ): RenderItem[] => {
   const queue: RenderItem[] = [];
@@ -233,6 +265,10 @@ const buildRenderQueue = (
     queue.push({ kind: 'npc', depth: npc.screenY, npc });
   }
 
+  for (const prop of props) {
+    queue.push({ kind: 'prop', depth: prop.screenY, prop });
+  }
+
   queue.push({ kind: 'player', depth: playerScreenY });
 
   queue.sort((a, b) => a.depth - b.depth);
@@ -245,15 +281,15 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, coins, npcs, playerScreenPos } = useProjectedScene(
+  const { tiles, coins, npcs, props, playerScreenPos } = useProjectedScene(
     gameState,
     width,
     height
   );
 
   const renderQueue = useMemo(
-    () => buildRenderQueue(tiles, coins, npcs, playerScreenPos.y),
-    [tiles, coins, npcs, playerScreenPos.y]
+    () => buildRenderQueue(tiles, coins, npcs, props, playerScreenPos.y),
+    [tiles, coins, npcs, props, playerScreenPos.y]
   );
 
   return (
@@ -354,15 +390,15 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, coins, npcs, playerScreenPos } = useProjectedScene(
+  const { tiles, coins, npcs, props, playerScreenPos } = useProjectedScene(
     gameState,
     width,
     height
   );
 
   const renderQueue = useMemo(
-    () => buildRenderQueue(tiles, coins, npcs, playerScreenPos.y),
-    [tiles, coins, npcs, playerScreenPos.y]
+    () => buildRenderQueue(tiles, coins, npcs, props, playerScreenPos.y),
+    [tiles, coins, npcs, props, playerScreenPos.y]
   );
 
   return (
@@ -384,6 +420,10 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
           case 'npc': {
             const { npc, screenX, screenY, radius } = item.npc;
             return renderWebNPC(npc, screenX, screenY, radius, index);
+          }
+          case 'prop': {
+            const { prop, screenX, screenY } = item.prop;
+            return renderWebProp(prop, screenX, screenY, index);
           }
           case 'player':
             return (
@@ -408,6 +448,88 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
   );
 };
 
+const shouldHaveTrafficLight = (tile: Tile, neighbors: RoadNeighbors): boolean => {
+  if (tile.type !== 'road') return false;
+  
+  // Count road connections
+  const connectionCount = [neighbors.left, neighbors.right, neighbors.top, neighbors.bottom].filter(Boolean).length;
+  
+  // Traffic lights at 4-way intersections (major crossroads)
+  if (connectionCount === 4) {
+    // Use deterministic seeding - place traffic lights at some intersections
+    const seed = tile.x * 73 + tile.y * 37;
+    return seed % 3 === 0; // ~33% of 4-way intersections
+  }
+  
+  return false;
+};
+
+const renderTrafficLight = (screenX: number, screenY: number, key: number) => {
+  const lightSize = TILE_SIZE * 0.15;
+  const poleHeight = TILE_SIZE * 0.4;
+  
+  return (
+    <View key={`traffic-light-${key}`} style={{ position: 'absolute', left: screenX, top: screenY }}>
+      {/* Traffic light pole */}
+      <View
+        style={{
+          position: 'absolute',
+          left: TILE_SIZE * 0.85,
+          top: TILE_SIZE * 0.1,
+          width: 4,
+          height: poleHeight,
+          backgroundColor: '#333',
+        }}
+      />
+      {/* Traffic light box */}
+      <View
+        style={{
+          position: 'absolute',
+          left: TILE_SIZE * 0.85 - lightSize / 2 + 2,
+          top: TILE_SIZE * 0.1,
+          width: lightSize,
+          height: lightSize * 3,
+          backgroundColor: '#222',
+          borderWidth: 1,
+          borderColor: '#000',
+          borderRadius: 2,
+        }}
+      >
+        {/* Red light */}
+        <View
+          style={{
+            width: lightSize * 0.6,
+            height: lightSize * 0.6,
+            borderRadius: (lightSize * 0.6) / 2,
+            backgroundColor: '#ff4444',
+            margin: lightSize * 0.2,
+          }}
+        />
+        {/* Yellow light */}
+        <View
+          style={{
+            width: lightSize * 0.6,
+            height: lightSize * 0.6,
+            borderRadius: (lightSize * 0.6) / 2,
+            backgroundColor: '#444',
+            margin: lightSize * 0.2,
+          }}
+        />
+        {/* Green light */}
+        <View
+          style={{
+            width: lightSize * 0.6,
+            height: lightSize * 0.6,
+            borderRadius: (lightSize * 0.6) / 2,
+            backgroundColor: '#444',
+            margin: lightSize * 0.2,
+          }}
+        />
+      </View>
+    </View>
+  );
+};
+
 const renderWebSurface = (
   tile: Tile,
   screenX: number,
@@ -419,6 +541,18 @@ const renderWebSurface = (
     const palette = tile.type === 'pavement' ? PAVEMENT_COLORS : GRASS_COLORS;
     const colorVariant = (tile.x + tile.y) % palette.length;
     const baseColor = palette[colorVariant];
+    
+    // Check if this is a pavement tile adjacent to roads
+    const isPavement = tile.type === 'pavement';
+    const hasCurbTop = isPavement && neighbors.top;
+    const hasCurbBottom = isPavement && neighbors.bottom;
+    const hasCurbLeft = isPavement && neighbors.left;
+    const hasCurbRight = isPavement && neighbors.right;
+    
+    // Check if this is a crosswalk (pavement between two parallel roads)
+    const isHorizontalCrosswalk = isPavement && neighbors.left && neighbors.right;
+    const isVerticalCrosswalk = isPavement && neighbors.top && neighbors.bottom;
+    
     return (
       <View
         key={`surface-${tile.x}-${tile.y}-${key}`}
@@ -430,27 +564,94 @@ const renderWebSurface = (
             backgroundColor: baseColor,
           },
         ]}
-      />
+      >
+        {/* Curb edges */}
+        {hasCurbTop && <View style={webStyles.curbTop} />}
+        {hasCurbBottom && <View style={webStyles.curbBottom} />}
+        {hasCurbLeft && <View style={webStyles.curbLeft} />}
+        {hasCurbRight && <View style={webStyles.curbRight} />}
+        
+        {/* Crosswalk stripes */}
+        {isHorizontalCrosswalk && (
+          <>
+            <View style={[webStyles.crosswalkStripe, { top: TILE_SIZE * 0.2 }]} />
+            <View style={[webStyles.crosswalkStripe, { top: TILE_SIZE * 0.4 }]} />
+            <View style={[webStyles.crosswalkStripe, { top: TILE_SIZE * 0.6 }]} />
+            <View style={[webStyles.crosswalkStripe, { top: TILE_SIZE * 0.8 }]} />
+          </>
+        )}
+        {isVerticalCrosswalk && (
+          <>
+            <View style={[webStyles.crosswalkStripeVertical, { left: TILE_SIZE * 0.2 }]} />
+            <View style={[webStyles.crosswalkStripeVertical, { left: TILE_SIZE * 0.4 }]} />
+            <View style={[webStyles.crosswalkStripeVertical, { left: TILE_SIZE * 0.6 }]} />
+            <View style={[webStyles.crosswalkStripeVertical, { left: TILE_SIZE * 0.8 }]} />
+          </>
+        )}
+      </View>
     );
   }
 
   if (tile.type === 'road') {
+    // Use roadConnections if available, otherwise fallback to neighbors
+    const left = tile.roadConnections?.west ?? neighbors.left;
+    const right = tile.roadConnections?.east ?? neighbors.right;
+    const top = tile.roadConnections?.north ?? neighbors.top;
+    const bottom = tile.roadConnections?.south ?? neighbors.bottom;
+    
+    // Count connections to determine road type
+    const connectionCount = [left, right, top, bottom].filter(Boolean).length;
+    
+    // Determine road markings based on connection type
+    const isHorizontal = (left || right) && !top && !bottom;
+    const isVertical = (top || bottom) && !left && !right;
+    const isCorner = connectionCount === 2 && (
+      (left && top) || (left && bottom) || (right && top) || (right && bottom)
+    );
+    const isTJunction = connectionCount === 3;
+    const isCrossroads = connectionCount === 4;
+    
+    const hasTrafficLight = shouldHaveTrafficLight(tile, neighbors);
+    
     return (
-      <View
-        key={`road-${tile.x}-${tile.y}-${key}`}
-        style={[webStyles.tileBase, webStyles.road, { left: screenX, top: screenY }]}
-      >
-        {(neighbors.left || neighbors.right) && (
-          <View style={webStyles.roadStripeHorizontal} />
-        )}
-        {(neighbors.top || neighbors.bottom) && (
-          <View style={webStyles.roadStripeVertical} />
-        )}
-        {(neighbors.left || neighbors.right) &&
-          (neighbors.top || neighbors.bottom) && (
+      <React.Fragment key={`road-frag-${tile.x}-${tile.y}-${key}`}>
+        <View
+          key={`road-${tile.x}-${tile.y}-${key}`}
+          style={[webStyles.tileBase, webStyles.road, { left: screenX, top: screenY }]}
+        >
+          {/* Horizontal road markings */}
+          {(isHorizontal || isCrossroads || isTJunction) && (left || right) && (
+            <View style={webStyles.roadStripeHorizontal} />
+          )}
+          
+          {/* Vertical road markings */}
+          {(isVertical || isCrossroads || isTJunction) && (top || bottom) && (
+            <View style={webStyles.roadStripeVertical} />
+          )}
+          
+          {/* Intersection marking (center dot) */}
+          {(isCrossroads || isTJunction) && (
             <View style={webStyles.roadIntersection} />
           )}
-      </View>
+          
+          {/* Corner markings - add subtle corner lines */}
+          {isCorner && left && top && (
+            <View style={webStyles.roadCornerNW} />
+          )}
+          {isCorner && right && top && (
+            <View style={webStyles.roadCornerNE} />
+          )}
+          {isCorner && left && bottom && (
+            <View style={webStyles.roadCornerSW} />
+          )}
+          {isCorner && right && bottom && (
+            <View style={webStyles.roadCornerSE} />
+          )}
+        </View>
+        
+        {/* Traffic light at major intersections */}
+        {hasTrafficLight && renderTrafficLight(screenX, screenY, key)}
+      </React.Fragment>
     );
   }
 
@@ -560,6 +761,122 @@ const renderWebNPC = (npc: NPC, screenX: number, screenY: number, radius: number
   />
 );
 
+const renderWebProp = (prop: Prop, screenX: number, screenY: number, key: number) => {
+  const halfSize = prop.size / 2;
+
+  switch (prop.type) {
+    case 'tree':
+      return (
+        <View
+          key={`prop-${prop.id}-${key}`}
+          style={{
+            position: 'absolute',
+            left: screenX - halfSize,
+            top: screenY - halfSize,
+          }}
+        >
+          {/* Tree trunk */}
+          <View
+            style={{
+              position: 'absolute',
+              left: halfSize - 3,
+              top: halfSize,
+              width: 6,
+              height: halfSize,
+              backgroundColor: '#4a3728',
+            }}
+          />
+          {/* Tree foliage */}
+          <View
+            style={{
+              position: 'absolute',
+              left: halfSize - halfSize * 0.7,
+              top: halfSize * 0.2,
+              width: halfSize * 1.4,
+              height: halfSize * 1.4,
+              borderRadius: halfSize * 0.7,
+              backgroundColor: '#2d5016',
+              borderWidth: 1,
+              borderColor: '#1f3a0f',
+            }}
+          />
+        </View>
+      );
+
+    case 'lamp-post':
+      return (
+        <View
+          key={`prop-${prop.id}-${key}`}
+          style={{
+            position: 'absolute',
+            left: screenX - 2,
+            top: screenY - halfSize,
+          }}
+        >
+          {/* Post */}
+          <View
+            style={{
+              width: 4,
+              height: prop.size,
+              backgroundColor: '#555',
+            }}
+          />
+          {/* Light */}
+          <View
+            style={{
+              position: 'absolute',
+              top: -6,
+              left: -4,
+              width: 12,
+              height: 6,
+              backgroundColor: '#f0e68c',
+              borderRadius: 3,
+            }}
+          />
+        </View>
+      );
+
+    case 'bench':
+      return (
+        <View
+          key={`prop-${prop.id}-${key}`}
+          style={{
+            position: 'absolute',
+            left: screenX - halfSize,
+            top: screenY - halfSize * 0.5,
+            width: prop.size,
+            height: prop.size * 0.5,
+            backgroundColor: '#8b4513',
+            borderWidth: 1,
+            borderColor: '#5d2e0a',
+            borderRadius: 2,
+          }}
+        />
+      );
+
+    case 'trash-bin':
+      return (
+        <View
+          key={`prop-${prop.id}-${key}`}
+          style={{
+            position: 'absolute',
+            left: screenX - halfSize * 0.6,
+            top: screenY - halfSize,
+            width: halfSize * 1.2,
+            height: prop.size,
+            backgroundColor: '#444',
+            borderWidth: 1,
+            borderColor: '#222',
+            borderRadius: 2,
+          }}
+        />
+      );
+
+    default:
+      return null;
+  }
+};
+
 const webStyles = StyleSheet.create({
   root: {
     position: 'relative',
@@ -573,6 +890,52 @@ const webStyles = StyleSheet.create({
   },
   grass: {},
   pavement: {},
+  curbTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: '#555',
+  },
+  curbBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: '#555',
+  },
+  curbLeft: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: '#555',
+  },
+  curbRight: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: '#555',
+  },
+  crosswalkStripe: {
+    position: 'absolute',
+    left: TILE_SIZE * 0.1,
+    right: TILE_SIZE * 0.1,
+    height: TILE_SIZE * 0.12,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  crosswalkStripeVertical: {
+    position: 'absolute',
+    top: TILE_SIZE * 0.1,
+    bottom: TILE_SIZE * 0.1,
+    width: TILE_SIZE * 0.12,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+  },
   road: {
     backgroundColor: '#2a2a2a',
   },
@@ -600,6 +963,50 @@ const webStyles = StyleSheet.create({
     height: TILE_SIZE * 0.2,
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: TILE_SIZE * 0.02,
+  },
+  roadCornerNW: {
+    position: 'absolute',
+    left: TILE_SIZE * 0.15,
+    top: TILE_SIZE * 0.15,
+    width: TILE_SIZE * 0.35,
+    height: TILE_SIZE * 0.35,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#e0c030',
+    borderTopLeftRadius: TILE_SIZE * 0.2,
+  },
+  roadCornerNE: {
+    position: 'absolute',
+    right: TILE_SIZE * 0.15,
+    top: TILE_SIZE * 0.15,
+    width: TILE_SIZE * 0.35,
+    height: TILE_SIZE * 0.35,
+    borderRightWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#e0c030',
+    borderTopRightRadius: TILE_SIZE * 0.2,
+  },
+  roadCornerSW: {
+    position: 'absolute',
+    left: TILE_SIZE * 0.15,
+    bottom: TILE_SIZE * 0.15,
+    width: TILE_SIZE * 0.35,
+    height: TILE_SIZE * 0.35,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: '#e0c030',
+    borderBottomLeftRadius: TILE_SIZE * 0.2,
+  },
+  roadCornerSE: {
+    position: 'absolute',
+    right: TILE_SIZE * 0.15,
+    bottom: TILE_SIZE * 0.15,
+    width: TILE_SIZE * 0.35,
+    height: TILE_SIZE * 0.35,
+    borderRightWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: '#e0c030',
+    borderBottomRightRadius: TILE_SIZE * 0.2,
   },
   coin: {
     position: 'absolute',

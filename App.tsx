@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, StyleSheet, Dimensions, Platform, TouchableOpacity, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { GameLoop } from './src/systems/GameLoop';
 import { GameRenderer } from './src/components/GameRenderer';
 import { VirtualJoystick } from './src/components/VirtualJoystick';
 import { GameHUD } from './src/components/GameHUD';
+import { PauseMenu } from './src/components/PauseMenu';
 import { GameState, Vector2, WeaponId } from './src/types/Game';
 
 const KEYBOARD_DIRECTIONS: Record<string, Vector2> = {
@@ -91,6 +92,12 @@ export default function App() {
     }
   };
 
+  const handlePause = useCallback(() => {
+    if (gameLoopRef.current) {
+      gameLoopRef.current.togglePause();
+    }
+  }, []);
+
   useEffect(() => {
     if (Platform.OS !== 'web') {
       return;
@@ -124,6 +131,14 @@ export default function App() {
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const { code } = event;
+      
+      // Handle ESC key for pause
+      if (code === 'Escape') {
+        event.preventDefault();
+        handlePause();
+        return;
+      }
+
       if (!KEYBOARD_DIRECTIONS[code]) {
         return;
       }
@@ -163,7 +178,7 @@ export default function App() {
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [updateCombinedInput]);
+  }, [updateCombinedInput, handlePause]);
 
   if (!gameState) {
     return (
@@ -188,6 +203,20 @@ export default function App() {
         onWeaponSelect={handleWeaponSelect}
       />
       <VirtualJoystick onInputChange={handleJoystickInputChange} />
+      
+      {/* Pause button */}
+      <TouchableOpacity
+        style={styles.pauseButton}
+        onPress={handlePause}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.pauseButtonText}>⏸</Text>
+      </TouchableOpacity>
+
+      {/* Pause menu overlay */}
+      {gameState.isPaused && (
+        <PauseMenu onResume={handlePause} />
+      )}
     </View>
   );
 }
@@ -197,5 +226,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1a1a1a',
     position: 'relative',
+  },
+  pauseButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  pauseButtonText: {
+    fontSize: 24,
+    color: '#FFD700',
   },
 });
