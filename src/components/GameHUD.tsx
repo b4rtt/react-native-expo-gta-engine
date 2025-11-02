@@ -13,13 +13,6 @@ const WEAPON_ICONS: Record<WeaponId, string> = {
   bat: '🪓',
 };
 
-const WEAPON_LABELS: Record<WeaponId, string> = {
-  fist: 'Fist',
-  pistol: 'Pistol',
-  knife: 'Knife',
-  bat: 'Bat',
-};
-
 interface GameHUDProps {
   stats: GameStats;
   weapons: WeaponId[];
@@ -35,26 +28,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 }) => {
   return (
     <View style={styles.container} pointerEvents="box-none">
-      <View style={styles.wantedOverlay} pointerEvents="none">
-        <View style={styles.wantedBackground}>
-          <View style={styles.starRow}>
-            {Array.from({ length: MAX_WANTED_STARS }).map((_, index) => {
-              const active = index < stats.wantedLevel;
-              return (
-                <Text
-                  key={index}
-                  style={[styles.wantedStar, active ? styles.wantedStarActive : styles.wantedStarDisabled]}
-                >
-                  ★
-                </Text>
-              );
-            })}
-          </View>
-        </View>
-      </View>
-      <View style={styles.statsRow} pointerEvents="none">
+      <View style={styles.topRightContainer} pointerEvents="none">
         <View style={styles.healthContainer}>
-          <Text style={styles.sectionLabel}>Health</Text>
           <View style={styles.healthBarBackground}>
             <View
               style={[
@@ -65,35 +40,46 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               ]}
             />
           </View>
+          <Text style={styles.healthLabel}>HP {stats.health}</Text>
         </View>
-        <View style={styles.cashContainer}>
-          <Text style={styles.sectionLabel}>Cash</Text>
-          <Text style={styles.cashValue}>{formatCash(stats.cash)}</Text>
-        </View>
-        <View style={styles.coinContainer}>
-          <Text style={styles.sectionLabel}>Coins</Text>
-          <Text style={styles.coinValue}>{stats.coinsCollected}</Text>
+        <View style={styles.moneyStack}>
+          <View style={styles.valueRow}>
+            <Text style={styles.valueLabel}>CASH</Text>
+            <Text style={styles.valueNumber}>{formatCash(stats.cash)}</Text>
+          </View>
+          <View style={styles.valueRow}>
+            <Text style={styles.valueLabel}>COINS</Text>
+            <Text style={styles.valueNumber}>{stats.coinsCollected}</Text>
+          </View>
         </View>
       </View>
-      <View style={styles.weaponBarContainer}>
-        <View style={styles.weaponBar}>
-          {weapons.map((weapon) => {
-            const active = weapon === selectedWeapon;
-            return (
-              <TouchableOpacity
-                key={weapon}
-                style={[styles.weaponButton, active ? styles.weaponButtonActive : undefined]}
-                onPress={() => onWeaponSelect(weapon)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.weaponEmoji}>{WEAPON_ICONS[weapon]}</Text>
-                <Text style={[styles.weaponLabel, active ? styles.weaponLabelActive : undefined]}>
-                  {WEAPON_LABELS[weapon]}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+      <View style={styles.wantedRow} pointerEvents="none">
+        {Array.from({ length: MAX_WANTED_STARS }).map((_, index) => {
+          const active = index < stats.wantedLevel;
+          return (
+            <Text
+              key={index}
+              style={[styles.wantedStar, active ? styles.wantedStarActive : styles.wantedStarDisabled]}
+            >
+              ★
+            </Text>
+          );
+        })}
+      </View>
+      <View style={styles.weaponWidget}>
+        <TouchableOpacity
+          style={styles.weaponDisplay}
+          onPress={() => {
+            const currentIndex = weapons.findIndex((w) => w === selectedWeapon);
+            const nextWeapon = weapons[(currentIndex + 1) % weapons.length];
+            onWeaponSelect(nextWeapon);
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={styles.weaponIconFrame}>
+            <Text style={styles.weaponEmoji}>{WEAPON_ICONS[selectedWeapon]}</Text>
+          </View>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -102,45 +88,30 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 16,
-    left: 16,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  topRightContainer: {
+    position: 'absolute',
+    top: 72,
     right: 16,
-  },
-  wantedOverlay: {
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  wantedBackground: {
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 14,
-    paddingHorizontal: 18,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  sectionLabel: {
-    color: '#ffd966',
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: 4,
+    alignItems: 'flex-end',
+    gap: 10,
   },
   healthContainer: {
-    width: 180,
+    width: 156,
     backgroundColor: 'rgba(0,0,0,0.65)',
     borderRadius: 12,
-    padding: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
   },
   healthBarBackground: {
     height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 6,
     overflow: 'hidden',
   },
@@ -148,85 +119,76 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#ff5252',
   },
-  cashContainer: {
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    width: 130,
-  },
-  cashValue: {
-    color: '#a2ff5f',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  coinContainer: {
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    width: 110,
-  },
-  coinValue: {
+  healthLabel: {
+    marginTop: 4,
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  moneyStack: {
+    width: 156,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    gap: 6,
+  },
+  valueRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  valueLabel: {
+    color: '#ffd966',
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  valueNumber: {
+    color: '#ffffff',
+    fontSize: 16,
     fontWeight: '700',
   },
-  starRow: {
+  wantedRow: {
+    position: 'absolute',
+    top: 20,
+    right: 16,
     flexDirection: 'row',
-    justifyContent: 'center',
   },
   wantedStar: {
     fontSize: 20,
-    marginHorizontal: 3,
+    marginLeft: 3,
   },
   wantedStarActive: {
     color: '#ffd966',
   },
   wantedStarDisabled: {
-    color: 'rgba(255,255,255,0.2)',
+    color: 'rgba(255,255,255,0.25)',
   },
-  weaponBarContainer: {
+  weaponWidget: {
     position: 'absolute',
-    left: 16,
+    left: 20,
     bottom: 32,
   },
-  weaponBar: {
-    flexDirection: 'row',
+  weaponDisplay: {
     backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    padding: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    gap: 8,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
-  weaponButton: {
+  weaponIconFrame: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  weaponButtonActive: {
-    backgroundColor: 'rgba(162,255,95,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(162,255,95,0.5)',
   },
   weaponEmoji: {
-    fontSize: 22,
-  },
-  weaponLabel: {
-    marginTop: 2,
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  weaponLabelActive: {
-    color: '#a2ff5f',
+    fontSize: 34,
   },
 });
