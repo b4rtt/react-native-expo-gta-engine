@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { Canvas, Circle, Group } from '@shopify/react-native-skia';
-import { GameState, Tile, Collectible, NPC, Prop } from '../types/Game';
+import { Canvas, Circle, Group, RoundedRect, Rect } from '@shopify/react-native-skia';
+import { GameState, Tile, Collectible, NPC, Prop, PropType } from '../types/Game';
 import { IsometricGrass } from './IsometricGrass';
 import { IsometricRoad, RoadNeighbors } from './IsometricRoad';
 import { IsometricBuilding } from './IsometricBuilding';
@@ -366,6 +366,10 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
                   color={npc.color}
                 />
               );
+            }
+            case 'prop': {
+              const { prop, screenX, screenY } = item.prop;
+              return renderSkiaProp(prop.type, screenX, screenY, index);
             }
             case 'player':
               return (
@@ -834,6 +838,86 @@ const renderWebNPC = (npc: NPC, screenX: number, screenY: number, radius: number
     }}
   />
 );
+
+const renderSkiaProp = (propType: PropType, screenX: number, screenY: number, key: number) => {
+  const size = 20; // Default prop size
+  const halfSize = size / 2;
+
+  switch (propType) {
+    case 'tree':
+      return (
+        <Group key={`prop-${key}`}>
+          {/* Tree trunk */}
+          <Rect
+            x={screenX - 3}
+            y={screenY}
+            width={6}
+            height={halfSize}
+            color="#4a3728"
+          />
+          {/* Tree foliage */}
+          <Circle
+            cx={screenX}
+            cy={screenY - halfSize * 0.3}
+            r={halfSize * 0.7}
+            color="#2d5016"
+          />
+        </Group>
+      );
+
+    case 'lamp-post':
+      return (
+        <Group key={`prop-${key}`}>
+          {/* Post */}
+          <Rect
+            x={screenX - 2}
+            y={screenY - size}
+            width={4}
+            height={size}
+            color="#555555"
+          />
+          {/* Light */}
+          <RoundedRect
+            x={screenX - 6}
+            y={screenY - size - 6}
+            width={12}
+            height={6}
+            r={3}
+            color="#f0e68c"
+          />
+        </Group>
+      );
+
+    case 'bench':
+      return (
+        <RoundedRect
+          key={`prop-${key}`}
+          x={screenX - halfSize}
+          y={screenY - halfSize * 0.25}
+          width={size}
+          height={size * 0.5}
+          r={2}
+          color="#8b4513"
+        />
+      );
+
+    case 'trash-bin':
+      return (
+        <RoundedRect
+          key={`prop-${key}`}
+          x={screenX - halfSize * 0.6}
+          y={screenY - halfSize}
+          width={halfSize * 1.2}
+          height={size}
+          r={2}
+          color="#444444"
+        />
+      );
+
+    default:
+      return null;
+  }
+};
 
 const renderWebProp = (prop: Prop, screenX: number, screenY: number, key: number) => {
   const halfSize = prop.size / 2;
