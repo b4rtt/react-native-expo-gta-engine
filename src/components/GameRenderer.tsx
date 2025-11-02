@@ -5,6 +5,7 @@ import { GameState, Tile, Collectible } from '../types/Game';
 import { IsometricGrass } from './IsometricGrass';
 import { IsometricRoad, RoadNeighbors } from './IsometricRoad';
 import { IsometricBuilding } from './IsometricBuilding';
+import { computeBuildingStyle } from '../utils/BuildingStyle';
 import { worldToIsometric, TILE_SIZE } from '../utils/Isometric';
 
 interface GameRendererProps {
@@ -37,7 +38,6 @@ interface ProjectedScene {
 const CULL_MARGIN = TILE_SIZE * 2;
 const GRASS_COLORS = ['#3d6b34', '#4a7c3f', '#416e38'];
 const PAVEMENT_COLORS = ['#5b5b5b', '#616161', '#585858'];
-const BUILDING_BASE_COLORS = ['#5a4a4a', '#4a5a5a', '#4a4a5a', '#5a5a4a', '#4a4a4a'];
 const COIN_COLOR = '#f7d64c';
 const COIN_OUTLINE = '#cfa12f';
 const COIN_HIGHLIGHT = '#fff2a6';
@@ -416,6 +416,8 @@ const renderWebBuilding = (tile: Tile, screenX: number, screenY: number, key: nu
   const baseColor = BUILDING_BASE_COLORS[colorVariant];
   const darker = adjustBrightness(baseColor, 0.85);
   const lighter = adjustBrightness(baseColor, 1.3);
+  const floors = Math.min(buildingHeight, 3);
+  const windowHeight = (elevation + footprint) / Math.max(1, buildingHeight) * 0.3;
 
   return (
     <React.Fragment key={`building-${tile.x}-${tile.y}-${key}`}>
@@ -455,6 +457,33 @@ const renderWebBuilding = (tile: Tile, screenX: number, screenY: number, key: nu
           },
         ]}
       />
+      {buildingHeight > 1 &&
+        Array.from({ length: floors }).map((_, floor) => {
+          const y =
+            screenY +
+            offset -
+            elevation +
+            (elevation / Math.max(1, buildingHeight)) * floor +
+            6;
+          return (
+            <View key={`window-row-${floor}`}>
+              {[0.25, 0.5, 0.75].map((position, windowIndex) => (
+                <View
+                  key={`window-${floor}-${windowIndex}`}
+                  style={{
+                    position: 'absolute',
+                    left: screenX + offset + footprint * position - 6,
+                    top: y,
+                    width: 12,
+                    height: windowHeight,
+                    borderRadius: 2,
+                    backgroundColor: '#ffcc66',
+                  }}
+                />
+              ))}
+            </View>
+          );
+        })}
     </React.Fragment>
   );
 };
