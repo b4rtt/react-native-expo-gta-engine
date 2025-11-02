@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { View, StyleSheet, Dimensions, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { GameLoop } from './src/systems/GameLoop';
@@ -8,6 +8,17 @@ import { VirtualJoystick } from './src/components/VirtualJoystick';
 import { GameHUD } from './src/components/GameHUD';
 import { GameState, Vector2, WeaponId } from './src/types/Game';
 
+const KEYBOARD_DIRECTIONS: Record<string, Vector2> = {
+  ArrowUp: { x: 0, y: -1 },
+  ArrowDown: { x: 0, y: 1 },
+  ArrowLeft: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 },
+  KeyW: { x: 0, y: -1 },
+  KeyS: { x: 0, y: 1 },
+  KeyA: { x: -1, y: 0 },
+  KeyD: { x: 1, y: 0 },
+};
+
 export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [screenSize, setScreenSize] = useState({
@@ -15,6 +26,8 @@ export default function App() {
     height: Dimensions.get('window').height,
   });
   const gameLoopRef = useRef<GameLoop | null>(null);
+  const joystickInputRef = useRef<Vector2>({ x: 0, y: 0 });
+  const keyboardInputRef = useRef<Vector2>({ x: 0, y: 0 });
 
   useEffect(() => {
     // Lock screen orientation to landscape
@@ -46,17 +59,111 @@ export default function App() {
     };
   }, []);
 
-  const handleInputChange = (input: Vector2) => {
-    if (gameLoopRef.current) {
-      gameLoopRef.current.setInput(input);
+  const updateCombinedInput = useCallback(() => {
+    if (!gameLoopRef.current) {
+      return;
     }
-  };
+    const combined = {
+      x: joystickInputRef.current.x + keyboardInputRef.current.x,
+      y: joystickInputRef.current.y + keyboardInputRef.current.y,
+    };
+
+    const length = Math.hypot(combined.x, combined.y);
+    const clamped =
+      length > 1
+        ? { x: combined.x / length, y: combined.y / length }
+        : combined;
+
+    gameLoopRef.current.setInput(clamped);
+  }, []);
+
+  const handleJoystickInputChange = useCallback(
+    (input: Vector2) => {
+      joystickInputRef.current = input;
+      updateCombinedInput();
+    },
+    [updateCombinedInput]
+  );
 
   const handleWeaponSelect = (weapon: WeaponId) => {
     if (gameLoopRef.current) {
       gameLoopRef.current.setSelectedWeapon(weapon);
     }
   };
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+
+    const pressed = new Set<string>();
+
+    const recomputeKeyboardInput = () => {
+      let x = 0;
+      let y = 0;
+
+      pressed.forEach((code) => {
+        const dir = KEYBOARD_DIRECTIONS[code];
+        if (!dir) return;
+        x += dir.x;
+        y += dir.y;
+      });
+
+      if (x === 0 && y === 0) {
+        keyboardInputRef.current = { x: 0, y: 0 };
+      } else {
+        const length = Math.hypot(x, y);
+        keyboardInputRef.current = {
+          x: x / (length || 1),
+          y: y / (length || 1),
+        };
+      }
+
+      updateCombinedInput();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const { code } = event;
+      if (!KEYBOARD_DIRECTIONS[code]) {
+        return;
+      }
+
+      event.preventDefault();
+      if (!pressed.has(code)) {
+        pressed.add(code);
+        recomputeKeyboardInput();
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      const { code } = event;
+      if (!pressed.has(code)) {
+        return;
+      }
+      event.preventDefault();
+      pressed.delete(code);
+      recomputeKeyboardInput();
+    };
+
+    const handleBlur = () => {
+      if (pressed.size === 0) {
+        return;
+      }
+      pressed.clear();
+      keyboardInputRef.current = { x: 0, y: 0 };
+      updateCombinedInput();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [updateCombinedInput]);
 
   if (!gameState) {
     return (
@@ -80,7 +187,7 @@ export default function App() {
         selectedWeapon={gameState.selectedWeapon}
         onWeaponSelect={handleWeaponSelect}
       />
-      <VirtualJoystick onInputChange={handleInputChange} />
+      <VirtualJoystick onInputChange={handleJoystickInputChange} />
     </View>
   );
 }

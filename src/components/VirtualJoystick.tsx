@@ -15,15 +15,16 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
   });
   
   // Joystick position - bottom right corner
-  const joystickSize = 120;
+  const joystickSize = 110;
   const joystickRadius = joystickSize / 2;
-  const stickRadius = 25;
+  const stickRadius = 22;
   const maxDistance = joystickRadius - stickRadius - 5; // Max distance stick can move
   
   const centerX = screenSize.width - joystickRadius - 30; // 30px from right edge
   const centerY = screenSize.height - joystickRadius - 30; // 30px from bottom edge
   
   const [stickPosition, setStickPosition] = useState({ x: 0, y: 0 });
+  const [isActive, setIsActive] = useState(false);
   const stickVisualRef = useRef({ x: 0, y: 0 });
   const rafRef = useRef<number | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -61,6 +62,7 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
     updateStickVisual({ x: 0, y: 0 });
     onInputChange({ x: 0, y: 0 });
     touchStartRef.current = null;
+    setIsActive(false);
   };
 
   const panResponder = useRef(
@@ -80,6 +82,7 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
         
         if (dist <= joystickRadius + 20) { // 20px tolerance
           touchStartRef.current = { x: touchX, y: touchY };
+          setIsActive(true);
           handleTouch(touchX, touchY);
         }
       },
@@ -158,12 +161,14 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
       <View
         style={[
           styles.joystickBackground,
-          {
-            width: joystickSize,
-            height: joystickSize,
-            borderRadius: joystickRadius,
-          },
-        ]}
+              {
+                width: joystickSize,
+                height: joystickSize,
+                borderRadius: joystickRadius,
+                backgroundColor: isActive ? 'rgba(162,255,95,0.18)' : 'rgba(12, 17, 25, 0.45)',
+                borderColor: isActive ? 'rgba(162,255,95,0.55)' : 'rgba(255, 255, 255, 0.25)',
+              },
+            ]}
       />
       
       {/* Inner stick */}
@@ -178,6 +183,19 @@ export const VirtualJoystick: React.FC<VirtualJoystickProps> = ({
               { translateX: stickPosition.x },
               { translateY: stickPosition.y },
             ],
+            backgroundColor: isActive ? 'rgba(162,255,95,0.9)' : 'rgba(255, 255, 255, 0.85)',
+            borderColor: isActive ? 'rgba(162,255,95,1)' : 'rgba(255, 255, 255, 1)',
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.centerDot,
+          {
+            width: 6,
+            height: 6,
+            borderRadius: 3,
+            backgroundColor: isActive ? 'rgba(162,255,95,0.8)' : 'rgba(255,255,255,0.6)',
           },
         ]}
       />
@@ -194,14 +212,13 @@ const styles = StyleSheet.create({
     elevation: 1000, // Android
   },
   joystickBackground: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
     position: 'absolute',
   },
   joystickStick: {
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 1)',
+  },
+  centerDot: {
+    position: 'absolute',
   },
 });

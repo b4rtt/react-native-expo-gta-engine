@@ -10,7 +10,7 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [ ] Support entering/exiting vehicles: parked car entities, state transition to driving mode, and vehicle handling model.
 
 ## Controls & UI
-- [ ] Rework the virtual joystick visuals and responsiveness; provide optional keyboard mapping on web.
+- [x] Rework the virtual joystick visuals and responsiveness; provide optional keyboard mapping on web.
 - [x] Add an on-screen GTA-style HUD (health, cash, minimap placeholder, wanted stars stub).
 - [x] Add a weapon quick-select HUD with tap cycling and iconography placeholder.
 - [ ] Build a pause menu with resume/settings/exit and wire it into the game loop.
