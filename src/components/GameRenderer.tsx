@@ -738,9 +738,12 @@ const renderWebSurface = (
 
 const renderWebBuilding = (tile: Tile, screenX: number, screenY: number, key: number) => {
   const style = computeBuildingStyle(tile, screenX, screenY);
+  const buildingHeight = Math.max(1, tile.buildingHeight || 1);
+  const floorHeight = style.body.height / buildingHeight;
 
   return (
     <React.Fragment key={`building-${tile.x}-${tile.y}-${key}`}>
+      {/* Shadow */}
       <View
         style={[
           webStyles.buildingShadow,
@@ -752,6 +755,26 @@ const renderWebBuilding = (tile: Tile, screenX: number, screenY: number, key: nu
           },
         ]}
       />
+      
+      {/* Building body with color ramp per floor */}
+      {style.facadeColors.map((color, index) => {
+        const floorY = style.body.y + (buildingHeight - index - 1) * floorHeight;
+        return (
+          <View
+            key={`floor-${index}`}
+            style={{
+              position: 'absolute',
+              left: style.body.x,
+              top: floorY,
+              width: style.body.width,
+              height: floorHeight,
+              backgroundColor: color,
+            }}
+          />
+        );
+      })}
+      
+      {/* Body border */}
       <View
         style={[
           webStyles.buildingBody,
@@ -760,23 +783,14 @@ const renderWebBuilding = (tile: Tile, screenX: number, screenY: number, key: nu
             top: style.body.y,
             width: style.body.width,
             height: style.body.height,
-            backgroundColor: style.bodyColor,
+            backgroundColor: 'transparent',
             borderColor: style.bodyBorderColor,
+            borderWidth: 1,
           },
         ]}
       />
-      <View
-        style={[
-          webStyles.buildingRoof,
-          {
-            left: style.roof.x,
-            top: style.roof.y,
-            width: style.roof.width,
-            height: style.roof.height,
-            backgroundColor: style.roofColor,
-          },
-        ]}
-      />
+      
+      {/* Windows */}
       {style.windows.map((windowRect, index) => (
         <View
           key={`window-${index}`}
@@ -791,6 +805,35 @@ const renderWebBuilding = (tile: Tile, screenX: number, screenY: number, key: nu
           }}
         />
       ))}
+      
+      {/* Building details (doors, stairs, rooftop props) */}
+      {style.details.map((detail, index) => (
+        <View
+          key={`detail-${index}`}
+          style={{
+            position: 'absolute',
+            left: detail.rect.x,
+            top: detail.rect.y,
+            width: detail.rect.width,
+            height: detail.rect.height,
+            backgroundColor: detail.color || '#666666',
+          }}
+        />
+      ))}
+      
+      {/* Roof */}
+      <View
+        style={[
+          webStyles.buildingRoof,
+          {
+            left: style.roof.x,
+            top: style.roof.y,
+            width: style.roof.width,
+            height: style.roof.height,
+            backgroundColor: style.roofColor,
+          },
+        ]}
+      />
     </React.Fragment>
   );
 };

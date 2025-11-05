@@ -21,7 +21,7 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [x] Add sidewalks/curbs variation, crosswalks at intersections, and traffic lights props (with animation and proper placement).
 - [x] Scatter vegetation and street furniture (trees, lamp posts, trash bins, benches) with deterministic seeding.
 - [x] Create varied city layout with different districts (downtown, residential, industrial, parks) instead of uniform grid.
-- [ ] Improve building extrusion to show façades, roof details, rooftop props, and per-height color ramps.
+- [x] Improve building extrusion to show façades, roof details, rooftop props, and per-height color ramps.
 - [ ] Introduce water tiles (rivers/canals) and bridges connecting blocks.
 
 ## Art & Audio
