@@ -1,4 +1,4 @@
-import { GameState, Vector2, VehicleInput, WeaponId, Vehicle, Player, Projectile } from '../types/Game';
+import { GameState, Vector2, VehicleInput, WeaponId, Vehicle, Player, Projectile, Particle } from '../types/Game';
 import { createPlayer, updatePlayer } from '../entities/Player';
 import { createCamera, updateCamera } from './Camera';
 import { generateCityMap } from '../utils/CityMap';
@@ -15,6 +15,7 @@ import {
   checkProjectilePlayerCollision,
   getWeaponConfig
 } from '../entities/Projectile';
+import { updateParticle, createVehicleSmoke, createExplosion } from '../entities/Particles';
 import { generateProps } from '../utils/Props';
 import { TILE_SIZE } from '../utils/Isometric';
 import { serializeGameState, applySaveData, SaveData } from '../utils/SaveData';
@@ -73,6 +74,7 @@ export class GameLoop {
       collectibles,
       props,
       projectiles: [],
+      particles: [],
       stats: {
         coinsCollected: 0,
         cash: 0,
@@ -577,11 +579,47 @@ export class GameLoop {
     // Remove projectiles that hit something
     updatedProjectiles = updatedProjectiles.filter(proj => !projectilesToRemove.has(proj.id));
     
+    // Update particles (smoke, fire, explosions)
+    let updatedParticles: Particle[] = this.gameState.particles
+      .map(particle => updateParticle(particle, deltaTime))
+      .filter((particle): particle is Particle => particle !== null);
+    
+    // Generate smoke particles for damaged vehicles
+    for (const vehicle of updatedVehicles) {
+      if (!vehicle.destroyed) {
+        const healthPercent = vehicle.health / vehicle.maxHealth;
+        
+        // Only emit smoke if vehicle is below 50% health
+        if (healthPercent < 0.5) {
+          const damageIntensity = 1.0 - healthPercent; // 0.5 to 1.0
+          
+          // Emit smoke particles occasionally (throttled by random chance)
+          if (Math.random() < damageIntensity * 0.3) {
+            const smokeParticles = createVehicleSmoke(vehicle.position, damageIntensity);
+            updatedParticles.push(...smokeParticles);
+          }
+        }
+      }
+    }
+    
     // Remove destroyed vehicles or kick player out if their vehicle is destroyed
-    const destroyedVehicleId = updatedVehicles.find(v => v.destroyed && v.id === updatedPlayer.inVehicle)?.id;
+    const destroyedVehicles = updatedVehicles.filter(v => v.destroyed);
+    const destroyedVehicleId = destroyedVehicles.find(v => v.id === updatedPlayer.inVehicle)?.id;
+    
+    // Create explosion effects for newly destroyed vehicles
+    for (const vehicle of destroyedVehicles) {
+      // Check if this is a new destruction (not already processed)
+      const wasDestroyedBefore = this.gameState.vehicles.find(v => v.id === vehicle.id)?.destroyed;
+      if (!wasDestroyedBefore) {
+        // Create explosion particles
+        const explosionParticles = createExplosion(vehicle.position);
+        updatedParticles.push(...explosionParticles);
+      }
+    }
+    
     if (destroyedVehicleId) {
       // Kick player out of destroyed vehicle
-      const destroyedVehicle = updatedVehicles.find(v => v.id === destroyedVehicleId);
+      const destroyedVehicle = destroyedVehicles.find(v => v.id === destroyedVehicleId);
       if (destroyedVehicle) {
         updatedPlayer = {
           ...updatedPlayer,
@@ -740,6 +778,7 @@ export class GameLoop {
       npcs: updatedNPCs,
       vehicles: updatedVehicles,
       projectiles: updatedProjectiles,
+      particles: updatedParticles,
       timeOfDay: updatedTimeOfDay,
       lastUpdate: currentTime,
       fps: avgFPS,

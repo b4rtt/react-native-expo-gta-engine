@@ -14,6 +14,8 @@ export interface VehicleInput {
   steering: number; // -1 (left) to 1 (right), 0 = straight
 }
 
+import type { Particle } from './Effects';
+
 export type TileType = 'grass' | 'pavement' | 'road' | 'building' | 'water' | 'bridge';
 
 export type RoadConnection = {
@@ -152,6 +154,7 @@ export interface GameState {
   collectibles: Collectible[];
   props: Prop[];
   projectiles: Projectile[];
+  particles: Particle[];
   stats: GameStats;
   weapons: WeaponId[];
   selectedWeapon: WeaponId;
@@ -160,3 +163,6 @@ export interface GameState {
   fps?: number; // Frames per second for debug overlay
   timeOfDay: TimeOfDay; // Current time of day
 }
+
+// Re-export particle types for convenience
+export type { Particle, ParticleType, Effect } from './Effects';

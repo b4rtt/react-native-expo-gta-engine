@@ -62,6 +62,14 @@ interface ProjectedProjectile {
   weapon: string;
 }
 
+interface ProjectedParticle {
+  x: number;
+  y: number;
+  size: number;
+  opacity: number;
+  type: string;
+}
+
 interface ProjectedScene {
   tiles: ProjectedTile[];
   playerScreenPos: { x: number; y: number };
@@ -70,6 +78,7 @@ interface ProjectedScene {
   props: ProjectedProp[];
   vehicles: ProjectedVehicle[];
   projectiles: ProjectedProjectile[];
+  particles: ProjectedParticle[];
 }
 
 const CULL_MARGIN = TILE_SIZE * 2;
@@ -305,6 +314,36 @@ const useProjectedScene = (
       });
     }
 
+    // Project particles
+    const projectedParticles: ProjectedParticle[] = [];
+    for (const particle of gameState.particles) {
+      const iso = worldToIsometric({
+        x: particle.position.x,
+        y: particle.position.y,
+        z: 0,
+      });
+      
+      const screenX = iso.x - playerIso.x + halfWidth;
+      const screenY = iso.y - playerIso.y + halfHeight;
+      
+      if (
+        screenX < -CULL_MARGIN ||
+        screenX > width + CULL_MARGIN ||
+        screenY < -CULL_MARGIN ||
+        screenY > height + CULL_MARGIN
+      ) {
+        continue;
+      }
+      
+      projectedParticles.push({
+        x: screenX,
+        y: screenY,
+        size: particle.size,
+        opacity: particle.opacity,
+        type: particle.type,
+      });
+    }
+
     return {
       tiles: projectedTiles,
       playerScreenPos,
@@ -313,8 +352,9 @@ const useProjectedScene = (
       props: projectedProps,
       vehicles: projectedVehicles,
       projectiles: projectedProjectiles,
+      particles: projectedParticles,
     };
-  }, [tiles, collectibles, npcs, props, vehicles, projectiles, playerX, playerY, width, height]);
+  }, [tiles, collectibles, npcs, props, vehicles, projectiles, gameState.particles, playerX, playerY, width, height]);
 };
 
 export const GameRenderer: React.FC<GameRendererProps> = (props) => {
@@ -332,6 +372,7 @@ type RenderItem =
   | { kind: 'prop'; depth: number; prop: ProjectedProp }
   | { kind: 'vehicle'; depth: number; vehicle: ProjectedVehicle }
   | { kind: 'projectile'; depth: number; projectile: ProjectedProjectile }
+  | { kind: 'particle'; depth: number; particle: ProjectedParticle }
   | { kind: 'player'; depth: number };
 
 const buildRenderQueue = (
@@ -341,6 +382,7 @@ const buildRenderQueue = (
   props: ProjectedProp[],
   vehicles: ProjectedVehicle[],
   projectiles: ProjectedProjectile[],
+  particles: ProjectedParticle[],
   playerScreenY: number
 ): RenderItem[] => {
   const queue: RenderItem[] = [];
@@ -372,6 +414,10 @@ const buildRenderQueue = (
     queue.push({ kind: 'projectile', depth: projectile.y, projectile });
   }
 
+  for (const particle of particles) {
+    queue.push({ kind: 'particle', depth: particle.y, particle });
+  }
+
   queue.push({ kind: 'player', depth: playerScreenY });
 
   queue.sort((a, b) => a.depth - b.depth);
@@ -384,15 +430,15 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, coins, npcs, props, vehicles, projectiles, playerScreenPos } = useProjectedScene(
+  const { tiles, coins, npcs, props, vehicles, projectiles, particles, playerScreenPos } = useProjectedScene(
     gameState,
     width,
     height
   );
 
   const renderQueue = useMemo(
-    () => buildRenderQueue(tiles, coins, npcs, props, vehicles, projectiles, playerScreenPos.y),
-    [tiles, coins, npcs, props, vehicles, projectiles, playerScreenPos.y]
+    () => buildRenderQueue(tiles, coins, npcs, props, vehicles, projectiles, particles, playerScreenPos.y),
+    [tiles, coins, npcs, props, vehicles, projectiles, particles, playerScreenPos.y]
   );
 
   // Get time of day tint and ambient light
@@ -531,6 +577,34 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
                 </Group>
               );
             }
+            case 'particle': {
+              const { particle } = item;
+              const getParticleColor = (type: string): string => {
+                switch (type) {
+                  case 'smoke':
+                    return '#555555';
+                  case 'fire':
+                    return '#FF4500';
+                  case 'spark':
+                    return '#FFFF00';
+                  case 'explosion':
+                    return '#FF8C00';
+                  default:
+                    return '#888888';
+                }
+              };
+              return (
+                <Group key={`particle-${index}`}>
+                  <Circle
+                    cx={particle.x}
+                    cy={particle.y}
+                    r={particle.size}
+                    color={getParticleColor(particle.type)}
+                    opacity={particle.opacity}
+                  />
+                </Group>
+              );
+            }
             case 'player':
               return (
                 <PlayerSprite
@@ -553,15 +627,15 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, coins, npcs, props, vehicles, projectiles, playerScreenPos } = useProjectedScene(
+  const { tiles, coins, npcs, props, vehicles, projectiles, particles, playerScreenPos } = useProjectedScene(
     gameState,
     width,
     height
   );
 
   const renderQueue = useMemo(
-    () => buildRenderQueue(tiles, coins, npcs, props, vehicles, projectiles, playerScreenPos.y),
-    [tiles, coins, npcs, props, vehicles, projectiles, playerScreenPos.y]
+    () => buildRenderQueue(tiles, coins, npcs, props, vehicles, projectiles, particles, playerScreenPos.y),
+    [tiles, coins, npcs, props, vehicles, projectiles, particles, playerScreenPos.y]
   );
 
   // Get time of day tint and ambient light
@@ -640,6 +714,38 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
                   height: 6,
                   borderRadius: 3,
                   backgroundColor: '#FFD700',
+                }}
+              />
+            );
+          }
+          case 'particle': {
+            const { particle } = item;
+            const getParticleColor = (type: string): string => {
+              switch (type) {
+                case 'smoke':
+                  return '#555555';
+                case 'fire':
+                  return '#FF4500';
+                case 'spark':
+                  return '#FFFF00';
+                case 'explosion':
+                  return '#FF8C00';
+                default:
+                  return '#888888';
+              }
+            };
+            return (
+              <View
+                key={`particle-${index}`}
+                style={{
+                  position: 'absolute',
+                  left: particle.x - particle.size,
+                  top: particle.y - particle.size,
+                  width: particle.size * 2,
+                  height: particle.size * 2,
+                  borderRadius: particle.size,
+                  backgroundColor: getParticleColor(particle.type),
+                  opacity: particle.opacity,
                 }}
               />
             );
