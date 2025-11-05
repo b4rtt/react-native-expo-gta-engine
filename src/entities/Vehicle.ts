@@ -22,7 +22,8 @@ export const createVehicle = (
   x: number,
   y: number,
   id: string,
-  parked: boolean = true
+  parked: boolean = true,
+  isPolice: boolean = false
 ): Vehicle => {
   const seed = id.split('-').reduce((acc, val) => acc + parseInt(val, 36), 0);
   const colorIndex = Math.abs(seed) % VEHICLE_COLORS.length;
@@ -31,17 +32,25 @@ export const createVehicle = (
   const type = VEHICLE_TYPES[typeIndex];
   const maxSpeed = type === 'truck' ? 240 : type === 'van' ? 260 : 300; // Increased max speeds for better gameplay
   
+  // Police vehicles are always cars and have distinct colors
+  const vehicleType = isPolice ? 'car' : type;
+  const vehicleColor = isPolice ? '#0047AB' : VEHICLE_COLORS[colorIndex]; // Police blue
+  const vehicleMaxSpeed = isPolice ? 320 : maxSpeed; // Police cars are faster
+  
   return {
     id,
     position: { x, y },
     rotation: parked ? Math.random() * Math.PI * 2 : 0, // Random rotation when parked
     speed: 0,
-    size: type === 'truck' ? 48 : type === 'van' ? 44 : 40, // Different sizes
+    size: vehicleType === 'truck' ? 48 : vehicleType === 'van' ? 44 : 40, // Different sizes
     velocity: { x: 0, y: 0 },
-    maxSpeed,
+    maxSpeed: vehicleMaxSpeed,
     parked,
-    color: VEHICLE_COLORS[colorIndex],
-    type,
+    color: vehicleColor,
+    type: vehicleType,
+    isPolice,
+    chasing: false,
+    targetPosition: undefined,
   };
 };
 
@@ -194,6 +203,64 @@ export const updateVehicle = (
     velocity: resolvedVelocity,
     speed: newSpeed,
   };
+};
+
+/**
+ * Update police vehicle with AI chase logic
+ */
+export const updatePoliceVehicle = (
+  vehicle: Vehicle,
+  playerPosition: Vector2,
+  deltaTime: number,
+  tileLookup: TileLookup
+): Vehicle => {
+  if (vehicle.parked || !vehicle.chasing) {
+    return vehicle;
+  }
+  
+  // Calculate direction to player
+  const toPlayer = subtract(playerPosition, vehicle.position);
+  const distanceToPlayer = length(toPlayer);
+  
+  // If very close to player, slow down a bit
+  const closeDistance = 100;
+  const isClose = distanceToPlayer < closeDistance;
+  
+  // Calculate desired rotation (angle to player)
+  const desiredRotation = Math.atan2(toPlayer.y, toPlayer.x);
+  
+  // Calculate rotation difference
+  let rotationDiff = desiredRotation - vehicle.rotation;
+  
+  // Normalize to -PI to PI
+  while (rotationDiff > Math.PI) rotationDiff -= Math.PI * 2;
+  while (rotationDiff < -Math.PI) rotationDiff += Math.PI * 2;
+  
+  // Calculate AI input based on angle and distance
+  const steering = Math.max(-1, Math.min(1, rotationDiff * 2)); // Proportional steering
+  
+  // Accelerate if pointing roughly towards player, brake if pointing away
+  const angleThreshold = Math.PI / 3; // 60 degrees
+  let acceleration: number;
+  
+  if (Math.abs(rotationDiff) < angleThreshold) {
+    // Pointing towards player - accelerate
+    acceleration = isClose ? 0.5 : 1.0; // Slow down when close
+  } else if (Math.abs(rotationDiff) > Math.PI * 0.7) {
+    // Pointing away - reverse or brake
+    acceleration = -0.5;
+  } else {
+    // Turning - moderate acceleration
+    acceleration = 0.3;
+  }
+  
+  // Use regular vehicle update with AI input
+  const aiInput: VehicleInput = {
+    acceleration,
+    steering,
+  };
+  
+  return updateVehicle(vehicle, aiInput, deltaTime, tileLookup);
 };
 
 const BLOCKING_TILE_TYPES = ['building', 'water'];

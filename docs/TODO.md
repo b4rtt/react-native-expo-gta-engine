@@ -37,8 +37,8 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [x] Implement basic shooting mechanics (projectiles, hit detection, damage).
 - [x] Add weapon functionality (different weapons, ammo system, weapon switching).
 - [ ] Add ammo pickups and weapon pickups in the world.
-- [ ] Create wanted level system that increases when player commits crimes.
-- [ ] Add police vehicles that chase player when wanted level is high.
+- [x] Create wanted level system that increases when player commits crimes.
+- [x] Add police vehicles that chase player when wanted level is high.
 - [ ] Implement NPC reactions to player actions (flee from gunfire, call police).
 - [ ] Add health regeneration/pickup system.
 

@@ -114,6 +114,9 @@ export interface Vehicle extends Entity {
   parked: boolean; // true if parked, false if being driven
   color: string; // Vehicle color
   type: 'car' | 'truck' | 'van';
+  isPolice: boolean; // true if this is a police vehicle
+  chasing: boolean; // true if actively chasing the player
+  targetPosition?: Vector2; // Target position for AI chasing
 }
 
 export interface Camera {

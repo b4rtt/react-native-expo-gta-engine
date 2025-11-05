@@ -6,7 +6,7 @@ import { loadCityLayout } from '../utils/CityLoader';
 import { buildTileLookup, TileLookup, getTileAt } from '../utils/TileLookup';
 import { generateCoins, resolveCoinCollection } from '../utils/Collectibles';
 import { spawnNPCsInCity, updateNPC } from '../entities/NPC';
-import { spawnVehiclesInCity, updateVehicle } from '../entities/Vehicle';
+import { spawnVehiclesInCity, updateVehicle, updatePoliceVehicle, createVehicle } from '../entities/Vehicle';
 import { 
   createProjectile, 
   updateProjectile, 
@@ -37,6 +37,8 @@ export class GameLoop {
   private lastExitAttempt: number = 0;
   private lastExitTime: number = 0; // Track when player last exited a vehicle
   private pendingExit: boolean = false; // Flag for manual exit request
+  private lastWantedLevelDecrease: number = 0; // Track when wanted level was last decreased
+  private lastPoliceSpawnCheck: number = 0; // Track when we last checked police spawning
 
   constructor(onUpdate: (state: GameState) => void, cityLayoutData?: any) {
     this.onUpdate = onUpdate;
@@ -86,6 +88,10 @@ export class GameLoop {
       fps: 0,
       timeOfDay: createTimeOfDay(12, 0), // Start at noon
     };
+    
+    // Initialize wanted level timer
+    this.lastWantedLevelDecrease = Date.now();
+    this.lastPoliceSpawnCheck = Date.now();
   }
 
   setScreenSize(width: number, height: number) {
@@ -271,6 +277,14 @@ export class GameLoop {
       }
     }
     
+    // Update police vehicles with chase AI
+    updatedVehicles = updatedVehicles.map(vehicle => {
+      if (vehicle.isPolice && vehicle.chasing) {
+        return updatePoliceVehicle(vehicle, updatedPlayer.position, deltaTime, this.tileLookup);
+      }
+      return vehicle;
+    });
+    
     // Update player (returns new player object)
     // If in vehicle, sync position/rotation with vehicle
     // BUT: if pendingExit is set, don't sync with vehicle - prepare for exit
@@ -394,6 +408,9 @@ export class GameLoop {
     let updatedProjectiles = [...this.gameState.projectiles];
     let updatedPlayerForShooting = { ...updatedPlayer };
     let updatedNPCsFromShooting = [...this.gameState.npcs];
+    let updatedStats = { ...this.gameState.stats };
+    let npcKilledThisFrame = false;
+    let npcDamagedThisFrame = false;
     
     if (this.shootPressed && !updatedPlayer.inVehicle) {
       const currentWeapon = this.gameState.selectedWeapon;
@@ -444,13 +461,17 @@ export class GameLoop {
                   // NPC died - remove it
                   updatedNPCsFromShooting = updatedNPCsFromShooting.filter(n => n.id !== npc.id);
                   i--; // Adjust index after removal
+                  npcKilledThisFrame = true;
                 } else {
                   // Update NPC health
                   updatedNPCsFromShooting[i] = {
                     ...npc,
                     health: newHealth,
                   };
+                  npcDamagedThisFrame = true;
                 }
+                // Only hit one NPC per attack
+                break;
               }
             }
           }
@@ -512,12 +533,14 @@ export class GameLoop {
             // NPC died - remove it
             updatedNPCs = updatedNPCs.filter(n => n.id !== npc.id);
             i--; // Adjust index after removal
+            npcKilledThisFrame = true;
           } else {
             // Update NPC health
             updatedNPCs[i] = {
               ...npc,
               health: newHealth,
             };
+            npcDamagedThisFrame = true;
           }
           
           // Mark projectile for removal
@@ -530,16 +553,19 @@ export class GameLoop {
     // Remove projectiles that hit something
     updatedProjectiles = updatedProjectiles.filter(proj => !projectilesToRemove.has(proj.id));
     
-    // Update NPCs with normal AI
-    updatedNPCs = updatedNPCs.map((npc) =>
-      updateNPC(
+    // Update NPCs with normal AI (only if they still exist)
+    const finalNPCs: typeof updatedNPCs = [];
+    for (const npc of updatedNPCs) {
+      const updatedNpc = updateNPC(
         npc,
         deltaTime,
         this.tileLookup,
         updatedPlayer.position,
         updatedNPCs
-      )
-    );
+      );
+      finalNPCs.push(updatedNpc);
+    }
+    updatedNPCs = finalNPCs;
 
     const {
       collectibles: updatedCollectibles,
@@ -550,13 +576,107 @@ export class GameLoop {
       updatedPlayer.size / 2
     );
 
-    const updatedStats = collectedValue
-      ? {
-          ...this.gameState.stats,
-          coinsCollected: this.gameState.stats.coinsCollected + collectedValue,
-          cash: this.gameState.stats.cash + collectedValue * 10,
+    // Update stats with coin collection
+    if (collectedValue) {
+      updatedStats = {
+        ...updatedStats,
+        coinsCollected: updatedStats.coinsCollected + collectedValue,
+        cash: updatedStats.cash + collectedValue * 10,
+      };
+    }
+    
+    // Update wanted level based on crimes
+    if (npcKilledThisFrame) {
+      // Killing an NPC increases wanted level by 1 (max 6)
+      updatedStats = {
+        ...updatedStats,
+        wantedLevel: Math.min(6, updatedStats.wantedLevel + 1),
+      };
+      // Reset decay timer when committing crime
+      this.lastWantedLevelDecrease = currentTime;
+    } else if (npcDamagedThisFrame && updatedStats.wantedLevel === 0) {
+      // Attacking NPCs gives 1 star if player has no wanted level
+      updatedStats = {
+        ...updatedStats,
+        wantedLevel: 1,
+      };
+      // Reset decay timer when committing crime
+      this.lastWantedLevelDecrease = currentTime;
+    }
+    
+    // Decrease wanted level over time (if player behaves)
+    // Each star takes 30 seconds to decay
+    const WANTED_DECAY_TIME = 30000; // 30 seconds in milliseconds
+    if (updatedStats.wantedLevel > 0 && currentTime - this.lastWantedLevelDecrease >= WANTED_DECAY_TIME) {
+      updatedStats = {
+        ...updatedStats,
+        wantedLevel: Math.max(0, updatedStats.wantedLevel - 1),
+      };
+      this.lastWantedLevelDecrease = currentTime;
+    }
+    
+    // Manage police vehicles based on wanted level (throttled to once per second)
+    const POLICE_SPAWN_CHECK_INTERVAL = 1000; // Check every second
+    if (currentTime - this.lastPoliceSpawnCheck >= POLICE_SPAWN_CHECK_INTERVAL) {
+      this.lastPoliceSpawnCheck = currentTime;
+      
+      const currentPoliceCount = updatedVehicles.filter(v => v.isPolice).length;
+      const desiredPoliceCount = updatedStats.wantedLevel >= 2 ? Math.min(updatedStats.wantedLevel - 1, 4) : 0;
+      
+      if (desiredPoliceCount > currentPoliceCount) {
+        // Spawn more police
+        const toSpawn = desiredPoliceCount - currentPoliceCount;
+        for (let i = 0; i < toSpawn; i++) {
+          // Spawn police car near player (but not too close)
+          const spawnDistance = 300 + Math.random() * 200; // 300-500 pixels away
+          const spawnAngle = Math.random() * Math.PI * 2;
+          const spawnX = updatedPlayer.position.x + Math.cos(spawnAngle) * spawnDistance;
+          const spawnY = updatedPlayer.position.y + Math.sin(spawnAngle) * spawnDistance;
+          
+          // Find nearest road tile
+          const tileX = Math.floor(spawnX / TILE_SIZE);
+          const tileY = Math.floor(spawnY / TILE_SIZE);
+          const tile = getTileAt(this.tileLookup, tileX, tileY);
+          
+          // Only spawn if on or near a road
+          if (tile && (tile.type === 'road' || tile.type === 'pavement')) {
+            const policeId = `police-${Date.now()}-${i}`;
+            const policeCar = createVehicle(spawnX, spawnY, policeId, false, true);
+            updatedVehicles.push({
+              ...policeCar,
+              chasing: true,
+              targetPosition: updatedPlayer.position,
+            });
+          }
         }
-      : this.gameState.stats;
+      } else if (desiredPoliceCount < currentPoliceCount) {
+        // Remove some police (furthest ones first)
+        const policeVehicles = updatedVehicles
+          .filter(v => v.isPolice)
+          .map(v => ({
+            vehicle: v,
+            distance: length(subtract(v.position, updatedPlayer.position)),
+          }))
+          .sort((a, b) => b.distance - a.distance); // Sort by distance, furthest first
+        
+        const toRemove = currentPoliceCount - desiredPoliceCount;
+        const idsToRemove = new Set(policeVehicles.slice(0, toRemove).map(pv => pv.vehicle.id));
+        
+        updatedVehicles = updatedVehicles.filter(v => !idsToRemove.has(v.id));
+      }
+    }
+    
+    // Update police chase status
+    updatedVehicles = updatedVehicles.map(vehicle => {
+      if (vehicle.isPolice) {
+        return {
+          ...vehicle,
+          chasing: updatedStats.wantedLevel >= 2,
+          targetPosition: updatedPlayer.position,
+        };
+      }
+      return vehicle;
+    });
     
     // Update camera (returns new camera object)
     const updatedCamera = updateCamera(
