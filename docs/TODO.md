@@ -51,7 +51,7 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [ ] Create garage/parking system for saving vehicles.
 
 ## UI & UX Improvements
-- [ ] Implement functional minimap showing player position, objectives, and enemies.
+- [x] Implement functional minimap showing player position, objectives, and enemies.
 - [ ] Add notification system for missions, wanted level changes, and achievements.
 - [ ] Create death/wasted screen with respawn mechanic.
 - [ ] Add settings menu (sound volume, controls customization, graphics quality).

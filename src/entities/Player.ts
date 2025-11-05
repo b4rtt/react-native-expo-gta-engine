@@ -57,7 +57,7 @@ export const createPlayer = (x: number, y: number): Player => ({
   speed: 0,
   size: 32, // Match sprite size
   velocity: { x: 0, y: 0 },
-  maxSpeed: 180, // Moderate speed for better control
+  maxSpeed: 120, // Slower speed for better control (was 180)
   animation: createSpriteAnimation('front', 'idle'),
   lastShotTime: 0,
   weaponInventory: {

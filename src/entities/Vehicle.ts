@@ -69,10 +69,10 @@ export const updateVehicle = (
   }
 
   // Vehicle physics constants - improved for better feel
-  const acceleration = 1800; // Forward acceleration (increased for snappier response)
-  const brakeDeceleration = 2000; // Braking deceleration (strong brakes)
-  const reverseAcceleration = 1000; // Reverse acceleration (decent reverse speed)
-  const deceleration = 1000; // Natural deceleration when no input (faster slowdown)
+  const acceleration = 3000; // Forward acceleration (much faster acceleration)
+  const brakeDeceleration = 2500; // Braking deceleration (strong brakes)
+  const reverseAcceleration = 1500; // Reverse acceleration (better reverse speed)
+  const deceleration = 800; // Natural deceleration when no input (slower slowdown for coasting)
   const turnRate = 5.5; // Radians per second (improved turning)
   const driftFactor = 0.82; // How much the vehicle drifts (slightly more responsive)
   

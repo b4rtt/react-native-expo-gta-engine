@@ -511,6 +511,7 @@ export default function App() {
           }
         }}
         timeOfDay={gameState.timeOfDay}
+        gameState={gameState}
       />
       <VirtualJoystick onInputChange={handleJoystickInputChange} />
       

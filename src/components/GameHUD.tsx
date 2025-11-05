@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { GameStats, WeaponId, WeaponInventory, TimeOfDay } from '../types/Game';
+import { GameStats, WeaponId, WeaponInventory, TimeOfDay, GameState } from '../types/Game';
 import { formatTime } from '../utils/TimeOfDay';
+import { Minimap } from './Minimap';
 
 const MAX_WANTED_STARS = 6;
 
@@ -25,6 +26,7 @@ interface GameHUDProps {
   vehicleMaxSpeed?: number;
   onExitVehicle?: () => void;
   timeOfDay?: TimeOfDay;
+  gameState: GameState;
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
@@ -38,12 +40,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   vehicleMaxSpeed = 280,
   onExitVehicle,
   timeOfDay,
+  gameState,
 }) => {
   const currentWeaponAmmo = weaponInventory[selectedWeapon];
   const ammoText = currentWeaponAmmo?.ammo === -1 ? '∞' : (currentWeaponAmmo?.ammo ?? 0).toString();
   return (
     <View style={styles.container} pointerEvents="box-none">
-      {/* Exit vehicle button */}
+      {/* Exit vehicle button - moved to top left */}
       {isInVehicle && onExitVehicle && (
         <TouchableOpacity
           style={styles.exitVehicleButton}
@@ -135,6 +138,10 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           </TouchableOpacity>
         </View>
       )}
+      {/* Minimap - bottom right */}
+      <View style={styles.minimapContainer} pointerEvents="none">
+        <Minimap gameState={gameState} size={120} />
+      </View>
     </View>
   );
 };
@@ -252,6 +259,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
+  minimapContainer: {
+    position: 'absolute',
+    left: 20,
+    top: 110, // Left top, below time display
+  },
   speedometerWidget: {
     position: 'absolute',
     left: 20,
@@ -295,7 +307,7 @@ const styles = StyleSheet.create({
   },
   exitVehicleButton: {
     position: 'absolute',
-    bottom: 100,
+    top: 140,
     left: 20,
     backgroundColor: 'rgba(200, 50, 50, 0.85)',
     paddingHorizontal: 20,

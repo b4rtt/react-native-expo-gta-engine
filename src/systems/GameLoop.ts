@@ -215,8 +215,8 @@ export class GameLoop {
 
     // Update time of day (only when not paused)
     // Time scale: 1.0 = 1 game minute per real second
-    // For testing: 60.0 = 1 game hour per real second (much faster)
-    const updatedTimeOfDay = updateTimeOfDay(this.gameState.timeOfDay, deltaTime, 60.0);
+    // 10.0 = 1 game hour per 6 real seconds (slower, more realistic pace)
+    const updatedTimeOfDay = updateTimeOfDay(this.gameState.timeOfDay, deltaTime, 10.0);
 
     // Handle vehicle entering/exiting
     let updatedVehicles = [...this.gameState.vehicles];
