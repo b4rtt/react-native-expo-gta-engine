@@ -33,11 +33,11 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 ## Tooling & Extensibility
 - [x] Load city layout from external matrix-based JSON/CSV definition, with fallback to procedural generation.
 - [ ] Provide a simple map editor (even CLI or React web panel) to edit tile types and props.
-- [ ] Document sprite sheet specifications and pipeline for adding new assets.
+- [x] Document sprite sheet specifications and pipeline for adding new assets.
 - [ ] Create automated tests for map generation, collision resolution, and animation state machine.
 
 ## Polish & Performance
 - [ ] Profile rendering on low-end devices; add tile batching and memoisation where necessary.
 - [x] Expose debug overlays (FPS counter, collision boxes, tile coordinates).
 - [x] Add save/load of player progress and world state.
-- [ ] Prepare CI script that runs TypeScript checks and linting on push.
+- [x] Prepare CI script that runs TypeScript checks and linting on push.

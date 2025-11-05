@@ -1,6 +1,6 @@
-import { Vehicle, Vector2, TileLookup } from '../types/Game';
+import { Vehicle, Vector2 } from '../types/Game';
 import { add, multiply, normalize, length, subtract } from '../utils/Math';
-import { getTileAt } from '../utils/TileLookup';
+import { getTileAt, TileLookup } from '../utils/TileLookup';
 import { TILE_SIZE } from '../utils/Isometric';
 
 const VEHICLE_COLORS = [
