@@ -11,6 +11,7 @@ import { PauseMenu } from './src/components/PauseMenu';
 import { MainMenu, MenuScreen } from './src/components/MainMenu';
 import { OptionsScreen } from './src/components/OptionsScreen';
 import { CreditsScreen } from './src/components/CreditsScreen';
+import { MapEditor } from './src/components/MapEditor';
 import { DebugOverlay } from './src/components/DebugOverlay';
 import { GameState, Vector2, WeaponId } from './src/types/Game';
 import { loadCityById, CityId } from './src/utils/CityFiles';
@@ -321,6 +322,15 @@ export default function App() {
       <View style={styles.container}>
         <StatusBar hidden />
         <CreditsScreen onBack={() => setCurrentScreen('main')} />
+      </View>
+    );
+  }
+
+  if (currentScreen === 'map-editor') {
+    return (
+      <View style={styles.container}>
+        <StatusBar hidden />
+        <MapEditor onClose={() => setCurrentScreen('main')} />
       </View>
     );
   }

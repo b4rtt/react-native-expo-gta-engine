@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView } from 'react-native';
 import { AVAILABLE_CITIES, CityId } from '../utils/CityFiles';
 
-export type MenuScreen = 'main' | 'options' | 'credits' | 'select-city';
+export type MenuScreen = 'main' | 'options' | 'credits' | 'select-city' | 'map-editor';
 
 interface MainMenuProps {
   onStartGame: (cityId: CityId | null) => void;
@@ -127,6 +127,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           activeOpacity={0.7}
         >
           <Text style={styles.buttonText}>CREDITS</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.button} 
+          onPress={() => handleScreenChange('map-editor')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.buttonText}>MAP EDITOR</Text>
         </TouchableOpacity>
 
         {Platform.OS === 'web' && (
