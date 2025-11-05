@@ -31,15 +31,43 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [x] Implement day/night cycle with palette shifts and dynamic lighting accents.
 - [x] Fix vehicle controls: acceleration with forward arrow, brake with backward arrow or spacebar, steering with left/right arrows.
 - [x] Add speedometer HUD when player is in vehicle (replace weapon selector).
+- [x] Improve vehicle acceleration and handling physics.
+
+## Combat & Wanted System
+- [x] Implement basic shooting mechanics (projectiles, hit detection, damage).
+- [x] Add weapon functionality (different weapons, ammo system, weapon switching).
+- [ ] Add ammo pickups and weapon pickups in the world.
+- [ ] Create wanted level system that increases when player commits crimes.
+- [ ] Add police vehicles that chase player when wanted level is high.
+- [ ] Implement NPC reactions to player actions (flee from gunfire, call police).
+- [ ] Add health regeneration/pickup system.
+
+## Advanced Gameplay
+- [ ] Implement vehicle damage system (visual damage, health, explosions).
+- [ ] Add mission system with objectives and rewards.
+- [ ] Create different pedestrian types (civilians, police, gang members).
+- [ ] Implement basic AI for police pursuit (pathfinding, ramming).
+- [ ] Add weapon shops where player can buy/upgrade weapons.
+- [ ] Create garage/parking system for saving vehicles.
+
+## UI & UX Improvements
+- [ ] Implement functional minimap showing player position, objectives, and enemies.
+- [ ] Add notification system for missions, wanted level changes, and achievements.
+- [ ] Create death/wasted screen with respawn mechanic.
+- [ ] Add settings menu (sound volume, controls customization, graphics quality).
+- [ ] Implement on-screen tutorial for first-time players.
 
 ## Tooling & Extensibility
 - [x] Load city layout from external matrix-based JSON/CSV definition, with fallback to procedural generation.
 - [x] Provide a simple map editor (even CLI or React web panel) to edit tile types and props.
 - [x] Document sprite sheet specifications and pipeline for adding new assets.
 - [ ] Create automated tests for map generation, collision resolution, and animation state machine.
+- [ ] Add mission editor for creating custom objectives and triggers.
 
 ## Polish & Performance
 - [ ] Profile rendering on low-end devices; add tile batching and memoisation where necessary.
 - [x] Expose debug overlays (FPS counter, collision boxes, tile coordinates).
 - [x] Add save/load of player progress and world state.
 - [x] Prepare CI script that runs TypeScript checks and linting on push.
+- [ ] Optimize collision detection for large numbers of entities.
+- [ ] Add particle effects for explosions, muzzle flash, and tire smoke.

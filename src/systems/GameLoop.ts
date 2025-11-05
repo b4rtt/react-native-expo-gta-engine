@@ -1,4 +1,4 @@
-import { GameState, Vector2, VehicleInput, WeaponId, Vehicle, Player } from '../types/Game';
+import { GameState, Vector2, VehicleInput, WeaponId, Vehicle, Player, Projectile } from '../types/Game';
 import { createPlayer, updatePlayer } from '../entities/Player';
 import { createCamera, updateCamera } from './Camera';
 import { generateCityMap } from '../utils/CityMap';
@@ -7,6 +7,13 @@ import { buildTileLookup, TileLookup, getTileAt } from '../utils/TileLookup';
 import { generateCoins, resolveCoinCollection } from '../utils/Collectibles';
 import { spawnNPCsInCity, updateNPC } from '../entities/NPC';
 import { spawnVehiclesInCity, updateVehicle } from '../entities/Vehicle';
+import { 
+  createProjectile, 
+  updateProjectile, 
+  checkProjectileNPCCollision,
+  checkProjectilePlayerCollision,
+  getWeaponConfig
+} from '../entities/Projectile';
 import { generateProps } from '../utils/Props';
 import { TILE_SIZE } from '../utils/Isometric';
 import { serializeGameState, applySaveData, SaveData } from '../utils/SaveData';
@@ -18,6 +25,7 @@ export class GameLoop {
   private gameState: GameState;
   private input: Vector2 = { x: 0, y: 0 };
   private vehicleInput: VehicleInput = { acceleration: 0, steering: 0 };
+  private shootPressed: boolean = false; // Track if shoot button is pressed
   private screenWidth: number = 0;
   private screenHeight: number = 0;
   private animationFrameId: number | null = null;
@@ -61,6 +69,7 @@ export class GameLoop {
       tiles,
       collectibles,
       props,
+      projectiles: [],
       stats: {
         coinsCollected: 0,
         cash: 0,
@@ -90,6 +99,10 @@ export class GameLoop {
 
   setVehicleInput(input: VehicleInput) {
     this.vehicleInput = { acceleration: input.acceleration, steering: input.steering };
+  }
+
+  setShoot(pressed: boolean) {
+    this.shootPressed = pressed;
   }
 
   setSelectedWeapon(weapon: WeaponId) {
@@ -377,14 +390,154 @@ export class GameLoop {
       this.pendingExit = false; // Clear exit flag if somehow set
     }
 
-    // Update each NPC individually with improved collision avoidance
-    const updatedNPCs = this.gameState.npcs.map((npc) =>
+    // Handle shooting
+    let updatedProjectiles = [...this.gameState.projectiles];
+    let updatedPlayerForShooting = { ...updatedPlayer };
+    let updatedNPCsFromShooting = [...this.gameState.npcs];
+    
+    if (this.shootPressed && !updatedPlayer.inVehicle) {
+      const currentWeapon = this.gameState.selectedWeapon;
+      const weaponConfig = getWeaponConfig(currentWeapon);
+      const timeSinceLastShot = (currentTime - updatedPlayer.lastShotTime) / 1000;
+      const currentAmmo = updatedPlayer.weaponInventory[currentWeapon]?.ammo ?? 0;
+      
+      // Check if enough time has passed since last shot (fire rate) and has ammo
+      const hasAmmo = currentAmmo === -1 || currentAmmo > 0; // -1 = infinite
+      
+      if (timeSinceLastShot >= weaponConfig.fireRate && hasAmmo) {
+        let newAmmo = currentAmmo;
+        
+        if (weaponConfig.type === 'ranged') {
+          // Ranged weapons create projectiles
+          const projectile = createProjectile(
+            updatedPlayer.position,
+            updatedPlayer.rotation,
+            currentWeapon,
+            updatedPlayer.id
+          );
+          updatedProjectiles.push(projectile);
+          
+          // Consume ammo (unless infinite)
+          if (currentAmmo !== -1) {
+            newAmmo = currentAmmo - 1;
+          }
+        } else {
+          // Melee weapons hit NPCs in range immediately
+          const attackRange = weaponConfig.range;
+          
+          for (let i = 0; i < updatedNPCsFromShooting.length; i++) {
+            const npc = updatedNPCsFromShooting[i];
+            const distance = length(subtract(npc.position, updatedPlayer.position));
+            
+            if (distance <= attackRange) {
+              // Check if NPC is roughly in front of player
+              const toNPC = subtract(npc.position, updatedPlayer.position);
+              const angleToNPC = Math.atan2(toNPC.y, toNPC.x);
+              const angleDiff = Math.abs(angleToNPC - updatedPlayer.rotation);
+              const normalizedDiff = Math.min(angleDiff, Math.PI * 2 - angleDiff);
+              
+              // Hit if within ~90 degrees in front
+              if (normalizedDiff < Math.PI / 2) {
+                const newHealth = Math.max(0, npc.health - weaponConfig.damage);
+                
+                if (newHealth <= 0) {
+                  // NPC died - remove it
+                  updatedNPCsFromShooting = updatedNPCsFromShooting.filter(n => n.id !== npc.id);
+                  i--; // Adjust index after removal
+                } else {
+                  // Update NPC health
+                  updatedNPCsFromShooting[i] = {
+                    ...npc,
+                    health: newHealth,
+                  };
+                }
+              }
+            }
+          }
+        }
+        
+        // Update player: last shot time and ammo
+        updatedPlayerForShooting = {
+          ...updatedPlayer,
+          lastShotTime: currentTime,
+          weaponInventory: {
+            ...updatedPlayer.weaponInventory,
+            [currentWeapon]: {
+              ...updatedPlayer.weaponInventory[currentWeapon],
+              ammo: newAmmo,
+            },
+          },
+        };
+        updatedPlayer = updatedPlayerForShooting;
+        
+        // Auto-switch to another weapon if current weapon runs out of ammo
+        if (newAmmo === 0 && weaponConfig.type === 'ranged') {
+          // Find a weapon with ammo
+          for (const weaponId of this.gameState.weapons) {
+            const weaponAmmo = updatedPlayer.weaponInventory[weaponId];
+            if (weaponAmmo && (weaponAmmo.ammo === -1 || weaponAmmo.ammo > 0)) {
+              this.gameState.selectedWeapon = weaponId;
+              break;
+            }
+          }
+        }
+      }
+    }
+    
+    // Update projectiles
+    updatedProjectiles = updatedProjectiles
+      .map(proj => updateProjectile(proj, deltaTime, this.tileLookup))
+      .filter(proj => proj !== null) as Projectile[];
+    
+    // Check projectile collisions with NPCs
+    let updatedNPCs = [...updatedNPCsFromShooting]; // Start with NPCs that may have been hit by melee
+    const projectilesToRemove = new Set<string>();
+    
+    for (const projectile of updatedProjectiles) {
+      // Skip if projectile already hit something
+      if (projectilesToRemove.has(projectile.id)) continue;
+      
+      // Check collision with each NPC
+      for (let i = 0; i < updatedNPCs.length; i++) {
+        const npc = updatedNPCs[i];
+        
+        // Don't hit own projectiles
+        if (projectile.ownerId === npc.id) continue;
+        
+        if (checkProjectileNPCCollision(projectile, npc)) {
+          // Damage NPC
+          const newHealth = Math.max(0, npc.health - projectile.damage);
+          
+          if (newHealth <= 0) {
+            // NPC died - remove it
+            updatedNPCs = updatedNPCs.filter(n => n.id !== npc.id);
+            i--; // Adjust index after removal
+          } else {
+            // Update NPC health
+            updatedNPCs[i] = {
+              ...npc,
+              health: newHealth,
+            };
+          }
+          
+          // Mark projectile for removal
+          projectilesToRemove.add(projectile.id);
+          break;
+        }
+      }
+    }
+    
+    // Remove projectiles that hit something
+    updatedProjectiles = updatedProjectiles.filter(proj => !projectilesToRemove.has(proj.id));
+    
+    // Update NPCs with normal AI
+    updatedNPCs = updatedNPCs.map((npc) =>
       updateNPC(
         npc,
         deltaTime,
         this.tileLookup,
         updatedPlayer.position,
-        this.gameState.npcs
+        updatedNPCs
       )
     );
 
@@ -423,6 +576,7 @@ export class GameLoop {
       stats: updatedStats,
       npcs: updatedNPCs,
       vehicles: updatedVehicles,
+      projectiles: updatedProjectiles,
       timeOfDay: updatedTimeOfDay,
       lastUpdate: currentTime,
       fps: avgFPS,

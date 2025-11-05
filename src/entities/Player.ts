@@ -59,6 +59,13 @@ export const createPlayer = (x: number, y: number): Player => ({
   velocity: { x: 0, y: 0 },
   maxSpeed: 180, // Moderate speed for better control
   animation: createSpriteAnimation('front', 'idle'),
+  lastShotTime: 0,
+  weaponInventory: {
+    fist: { ammo: -1, maxAmmo: -1 }, // Infinite
+    pistol: { ammo: 50, maxAmmo: 50 },
+    knife: { ammo: -1, maxAmmo: -1 }, // Infinite
+    bat: { ammo: -1, maxAmmo: -1 }, // Infinite
+  },
 });
 
 export const updatePlayer = (

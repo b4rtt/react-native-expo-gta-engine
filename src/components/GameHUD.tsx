@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { GameStats, WeaponId, TimeOfDay } from '../types/Game';
+import { GameStats, WeaponId, WeaponInventory, TimeOfDay } from '../types/Game';
 import { formatTime } from '../utils/TimeOfDay';
 
 const MAX_WANTED_STARS = 6;
@@ -18,6 +18,7 @@ interface GameHUDProps {
   stats: GameStats;
   weapons: WeaponId[];
   selectedWeapon: WeaponId;
+  weaponInventory: WeaponInventory;
   onWeaponSelect: (weapon: WeaponId) => void;
   isInVehicle?: boolean;
   vehicleSpeed?: number;
@@ -30,6 +31,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   stats,
   weapons,
   selectedWeapon,
+  weaponInventory,
   onWeaponSelect,
   isInVehicle = false,
   vehicleSpeed = 0,
@@ -37,6 +39,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onExitVehicle,
   timeOfDay,
 }) => {
+  const currentWeaponAmmo = weaponInventory[selectedWeapon];
+  const ammoText = currentWeaponAmmo?.ammo === -1 ? '∞' : (currentWeaponAmmo?.ammo ?? 0).toString();
   return (
     <View style={styles.container} pointerEvents="box-none">
       {/* Exit vehicle button */}
@@ -127,6 +131,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             <View style={styles.weaponIconFrame}>
               <Text style={styles.weaponEmoji}>{WEAPON_ICONS[selectedWeapon]}</Text>
             </View>
+            <Text style={styles.weaponAmmoText}>{ammoText}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -239,6 +244,13 @@ const styles = StyleSheet.create({
   },
   weaponEmoji: {
     fontSize: 34,
+  },
+  weaponAmmoText: {
+    marginTop: 6,
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   speedometerWidget: {
     position: 'absolute',

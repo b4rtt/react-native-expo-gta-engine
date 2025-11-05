@@ -55,6 +55,13 @@ interface ProjectedVehicle {
   depth: number;
 }
 
+interface ProjectedProjectile {
+  x: number;
+  y: number;
+  rotation: number;
+  weapon: string;
+}
+
 interface ProjectedScene {
   tiles: ProjectedTile[];
   playerScreenPos: { x: number; y: number };
@@ -62,6 +69,7 @@ interface ProjectedScene {
   npcs: ProjectedNPC[];
   props: ProjectedProp[];
   vehicles: ProjectedVehicle[];
+  projectiles: ProjectedProjectile[];
 }
 
 const CULL_MARGIN = TILE_SIZE * 2;
@@ -96,7 +104,7 @@ const useProjectedScene = (
   width: number,
   height: number
 ): ProjectedScene => {
-  const { player, tiles, collectibles, npcs, props, vehicles } = gameState;
+  const { player, tiles, collectibles, npcs, props, vehicles, projectiles } = gameState;
   const playerX = player.position.x;
   const playerY = player.position.y;
 
@@ -272,6 +280,31 @@ const useProjectedScene = (
       });
     }
 
+    // Project projectiles
+    const projectedProjectiles: ProjectedProjectile[] = [];
+    for (const projectile of projectiles) {
+      const iso = worldToIsometric({ x: projectile.position.x, y: projectile.position.y, z: 0 });
+      const screenX = iso.x - playerIso.x + halfWidth;
+      const screenY = iso.y - playerIso.y + halfHeight;
+
+      // Cull projectiles outside the screen
+      if (
+        screenX < -CULL_MARGIN ||
+        screenX > width + CULL_MARGIN ||
+        screenY < -CULL_MARGIN ||
+        screenY > height + CULL_MARGIN
+      ) {
+        continue;
+      }
+
+      projectedProjectiles.push({
+        x: screenX,
+        y: screenY,
+        rotation: projectile.rotation,
+        weapon: projectile.weapon,
+      });
+    }
+
     return {
       tiles: projectedTiles,
       playerScreenPos,
@@ -279,8 +312,9 @@ const useProjectedScene = (
       npcs: projectedNPCs,
       props: projectedProps,
       vehicles: projectedVehicles,
+      projectiles: projectedProjectiles,
     };
-  }, [tiles, collectibles, npcs, props, vehicles, playerX, playerY, width, height]);
+  }, [tiles, collectibles, npcs, props, vehicles, projectiles, playerX, playerY, width, height]);
 };
 
 export const GameRenderer: React.FC<GameRendererProps> = (props) => {
@@ -297,6 +331,7 @@ type RenderItem =
   | { kind: 'npc'; depth: number; npc: ProjectedNPC }
   | { kind: 'prop'; depth: number; prop: ProjectedProp }
   | { kind: 'vehicle'; depth: number; vehicle: ProjectedVehicle }
+  | { kind: 'projectile'; depth: number; projectile: ProjectedProjectile }
   | { kind: 'player'; depth: number };
 
 const buildRenderQueue = (
@@ -305,6 +340,7 @@ const buildRenderQueue = (
   npcs: ProjectedNPC[],
   props: ProjectedProp[],
   vehicles: ProjectedVehicle[],
+  projectiles: ProjectedProjectile[],
   playerScreenY: number
 ): RenderItem[] => {
   const queue: RenderItem[] = [];
@@ -332,6 +368,10 @@ const buildRenderQueue = (
     queue.push({ kind: 'vehicle', depth: vehicle.screenY, vehicle });
   }
 
+  for (const projectile of projectiles) {
+    queue.push({ kind: 'projectile', depth: projectile.y, projectile });
+  }
+
   queue.push({ kind: 'player', depth: playerScreenY });
 
   queue.sort((a, b) => a.depth - b.depth);
@@ -344,15 +384,15 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, coins, npcs, props, vehicles, playerScreenPos } = useProjectedScene(
+  const { tiles, coins, npcs, props, vehicles, projectiles, playerScreenPos } = useProjectedScene(
     gameState,
     width,
     height
   );
 
   const renderQueue = useMemo(
-    () => buildRenderQueue(tiles, coins, npcs, props, vehicles, playerScreenPos.y),
-    [tiles, coins, npcs, props, vehicles, playerScreenPos.y]
+    () => buildRenderQueue(tiles, coins, npcs, props, vehicles, projectiles, playerScreenPos.y),
+    [tiles, coins, npcs, props, vehicles, projectiles, playerScreenPos.y]
   );
 
   // Get time of day tint and ambient light
@@ -478,6 +518,19 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
               const { vehicle, screenX, screenY } = item.vehicle;
               return renderSkiaVehicle(vehicle, screenX, screenY, index);
             }
+            case 'projectile': {
+              const { projectile } = item;
+              return (
+                <Group key={`projectile-${index}`}>
+                  <Circle
+                    cx={projectile.x}
+                    cy={projectile.y}
+                    r={3}
+                    color="#FFD700"
+                  />
+                </Group>
+              );
+            }
             case 'player':
               return (
                 <PlayerSprite
@@ -500,15 +553,15 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, coins, npcs, props, vehicles, playerScreenPos } = useProjectedScene(
+  const { tiles, coins, npcs, props, vehicles, projectiles, playerScreenPos } = useProjectedScene(
     gameState,
     width,
     height
   );
 
   const renderQueue = useMemo(
-    () => buildRenderQueue(tiles, coins, npcs, props, vehicles, playerScreenPos.y),
-    [tiles, coins, npcs, props, vehicles, playerScreenPos.y]
+    () => buildRenderQueue(tiles, coins, npcs, props, vehicles, projectiles, playerScreenPos.y),
+    [tiles, coins, npcs, props, vehicles, projectiles, playerScreenPos.y]
   );
 
   // Get time of day tint and ambient light
@@ -573,6 +626,23 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
           case 'vehicle': {
             const { vehicle, screenX, screenY } = item.vehicle;
             return renderWebVehicle(vehicle, screenX, screenY, index);
+          }
+          case 'projectile': {
+            const { projectile } = item;
+            return (
+              <View
+                key={`projectile-${index}`}
+                style={{
+                  position: 'absolute',
+                  left: projectile.x - 3,
+                  top: projectile.y - 3,
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: '#FFD700',
+                }}
+              />
+            );
           }
           case 'player':
             return (

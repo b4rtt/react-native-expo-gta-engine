@@ -66,6 +66,8 @@ export const createNPC = (x: number, y: number, id: string): NPC => {
     target: { x, y }, // Start with current position as target
     color: NPC_COLORS[colorIndex],
     behavior: 'wander',
+    health: 100,
+    maxHealth: 100,
   };
 };
 

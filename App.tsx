@@ -300,17 +300,77 @@ export default function App() {
         setShowDebugOverlay((prev) => !prev);
         return;
       }
+      
+      // Get current game state for context
+      const currentGameState = gameLoopRef.current?.getState();
+      const isInVehicle = currentGameState?.player.inVehicle;
+      
+      // Handle weapon selection (only when not in vehicle)
+      if (!isInVehicle) {
+        // Direct weapon selection with number keys
+        if (code === 'Digit1') {
+          event.preventDefault();
+          handleWeaponSelect('fist');
+          return;
+        }
+        if (code === 'Digit2') {
+          event.preventDefault();
+          handleWeaponSelect('pistol');
+          return;
+        }
+        if (code === 'Digit3') {
+          event.preventDefault();
+          handleWeaponSelect('knife');
+          return;
+        }
+        if (code === 'Digit4') {
+          event.preventDefault();
+          handleWeaponSelect('bat');
+          return;
+        }
+        
+        // Cycle weapons with Q/E
+        if (code === 'KeyQ' || code === 'KeyE') {
+          event.preventDefault();
+          const weapons = currentGameState?.weapons || [];
+          const currentWeapon = currentGameState?.selectedWeapon || 'fist';
+          const currentIndex = weapons.findIndex((w) => w === currentWeapon);
+          
+          if (code === 'KeyQ') {
+            // Previous weapon
+            const prevWeapon = weapons[(currentIndex - 1 + weapons.length) % weapons.length];
+            handleWeaponSelect(prevWeapon);
+          } else {
+            // Next weapon
+            const nextWeapon = weapons[(currentIndex + 1) % weapons.length];
+            handleWeaponSelect(nextWeapon);
+          }
+          return;
+        }
+      }
 
       // Handle movement keys
       const isMovementKey = code === 'ArrowUp' || code === 'ArrowDown' || 
                            code === 'ArrowLeft' || code === 'ArrowRight' ||
                            code === 'KeyW' || code === 'KeyA' || code === 'KeyS' || code === 'KeyD';
       
-      // Handle spacebar only for vehicle brake
-      const currentGameState = gameLoopRef.current?.getState();
-      const isVehicleKey = code === 'Space' && currentGameState?.player.inVehicle;
+      // Handle spacebar for vehicle brake or shooting
+      if (code === 'Space') {
+        event.preventDefault();
+        if (isInVehicle) {
+          // Use spacebar for brake when in vehicle
+          if (!pressed.has(code)) {
+            pressed.add(code);
+            computeKeyboardInput();
+          }
+        } else {
+          // Use spacebar for shooting when on foot
+          gameLoopRef.current?.setShoot(true);
+        }
+        return;
+      }
       
-      if (isMovementKey || isVehicleKey) {
+      if (isMovementKey) {
         event.preventDefault();
         if (!pressed.has(code)) {
           pressed.add(code);
@@ -321,6 +381,18 @@ export default function App() {
 
     const handleKeyUp = (event: KeyboardEvent) => {
       const { code } = event;
+      
+      // Handle spacebar release for shooting
+      if (code === 'Space') {
+        event.preventDefault();
+        gameLoopRef.current?.setShoot(false);
+        // Also remove from pressed set if it was there for vehicle brake
+        if (pressed.has(code)) {
+          pressed.delete(code);
+          computeKeyboardInput();
+        }
+        return;
+      }
       
       if (pressed.has(code)) {
         event.preventDefault();
@@ -420,6 +492,7 @@ export default function App() {
         stats={gameState.stats}
         weapons={gameState.weapons}
         selectedWeapon={gameState.selectedWeapon}
+        weaponInventory={gameState.player.weaponInventory}
         onWeaponSelect={handleWeaponSelect}
         isInVehicle={!!gameState.player.inVehicle}
         vehicleSpeed={

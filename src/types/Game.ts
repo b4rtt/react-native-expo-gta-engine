@@ -25,7 +25,15 @@ export type RoadConnection = {
 
 export type CollectibleType = 'coin';
 export type WeaponId = 'fist' | 'pistol' | 'knife' | 'bat';
+export type WeaponType = 'melee' | 'ranged';
 export type PropType = 'tree' | 'lamp-post' | 'bench' | 'trash-bin';
+
+export interface WeaponInventory {
+  [weaponId: string]: {
+    ammo: number;
+    maxAmmo: number;
+  };
+}
 
 export interface Prop {
   id: string;
@@ -55,6 +63,8 @@ export interface NPC extends Entity {
   target: Vector2;
   color: string;
   behavior: 'wander';
+  health: number;
+  maxHealth: number;
 }
 
 export interface Collectible {
@@ -64,6 +74,18 @@ export interface Collectible {
   radius: number;
   value: number;
   collected: boolean;
+}
+
+export interface Projectile {
+  id: string;
+  position: Vector2;
+  velocity: Vector2;
+  rotation: number;
+  damage: number;
+  ownerId: string; // ID of who fired it (player, npc, etc)
+  lifetime: number; // Time remaining before despawn (in seconds)
+  maxLifetime: number; // Maximum lifetime
+  weapon: WeaponId;
 }
 
 export type Direction = 'front' | 'back' | 'right' | 'left';
@@ -82,6 +104,8 @@ export interface Player extends Entity {
   maxSpeed: number;
   animation: SpriteAnimation;
   inVehicle?: string; // ID of vehicle player is in, undefined if on foot
+  lastShotTime: number; // Timestamp of last shot fired
+  weaponInventory: WeaponInventory; // Ammo for each weapon
 }
 
 export interface Vehicle extends Entity {
@@ -121,6 +145,7 @@ export interface GameState {
   tiles: Tile[];
   collectibles: Collectible[];
   props: Prop[];
+  projectiles: Projectile[];
   stats: GameStats;
   weapons: WeaponId[];
   selectedWeapon: WeaponId;
