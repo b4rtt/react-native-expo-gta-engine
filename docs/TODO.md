@@ -31,7 +31,7 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [x] Implement day/night cycle with palette shifts and dynamic lighting accents.
 
 ## Tooling & Extensibility
-- [ ] Load city layout from external matrix-based JSON/CSV definition, with fallback to procedural generation.
+- [x] Load city layout from external matrix-based JSON/CSV definition, with fallback to procedural generation.
 - [ ] Provide a simple map editor (even CLI or React web panel) to edit tile types and props.
 - [ ] Document sprite sheet specifications and pipeline for adding new assets.
 - [ ] Create automated tests for map generation, collision resolution, and animation state machine.

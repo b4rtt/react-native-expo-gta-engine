@@ -2,6 +2,7 @@ import { GameState, Vector2, WeaponId, Vehicle, Player } from '../types/Game';
 import { createPlayer, updatePlayer } from '../entities/Player';
 import { createCamera, updateCamera } from './Camera';
 import { generateCityMap } from '../utils/CityMap';
+import { loadCityLayout } from '../utils/CityLoader';
 import { buildTileLookup, TileLookup, getTileAt } from '../utils/TileLookup';
 import { generateCoins, resolveCoinCollection } from '../utils/Collectibles';
 import { spawnNPCsInCity, updateNPC } from '../entities/NPC';
@@ -28,26 +29,29 @@ export class GameLoop {
   private lastExitTime: number = 0; // Track when player last exited a vehicle
   private pendingExit: boolean = false; // Flag for manual exit request
 
-  constructor(onUpdate: (state: GameState) => void) {
+  constructor(onUpdate: (state: GameState) => void, cityLayoutData?: any) {
     this.onUpdate = onUpdate;
-    // Generate city map (30x30 tiles for a bigger city)
-    const tiles = generateCityMap(30, 30);
+    // Load city map - try external layout, fallback to procedural generation
+    const cityData = loadCityLayout(cityLayoutData, undefined, 30, 30);
+    const tiles = cityData.tiles;
+    const cityWidth = cityData.width;
+    const cityHeight = cityData.height;
     this.tileLookup = buildTileLookup(tiles);
     const collectibles = generateCoins(tiles);
     const props = generateProps(tiles);
     const weapons: WeaponId[] = ['fist', 'pistol', 'knife', 'bat'];
     
     // Start player in center of map in world coordinates
-    const startTileX = 15;
-    const startTileY = 15;
+    const startTileX = Math.floor(cityWidth / 2);
+    const startTileY = Math.floor(cityHeight / 2);
     const startWorldX = startTileX * TILE_SIZE + TILE_SIZE / 2;
     const startWorldY = startTileY * TILE_SIZE + TILE_SIZE / 2;
     
     // Spawn NPCs across the city
-    const npcs = spawnNPCsInCity(30, TILE_SIZE, 15, this.tileLookup);
+    const npcs = spawnNPCsInCity(cityWidth, TILE_SIZE, 15, this.tileLookup);
     
     // Spawn vehicles parked on roads
-    const vehicles = spawnVehiclesInCity(30, TILE_SIZE, 20, this.tileLookup);
+    const vehicles = spawnVehiclesInCity(cityWidth, TILE_SIZE, 20, this.tileLookup);
     
     this.gameState = {
       player: createPlayer(startWorldX, startWorldY),
