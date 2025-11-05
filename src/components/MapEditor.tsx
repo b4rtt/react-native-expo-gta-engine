@@ -1,12 +1,14 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Platform } from 'react-native';
-import { AVAILABLE_CITIES, CityId, loadCityById } from '../utils/CityFiles';
+import { AVAILABLE_CITIES, CityId, loadCityById, saveCustomCity, getAllCities } from '../utils/CityFiles';
 import { loadCityFromJSON } from '../utils/CityLoader';
+import { Alert } from 'react-native';
 
 type TileCode = 'g' | 'p' | 'r' | 'b' | 'b1' | 'b2' | 'b3' | 'b4' | 'b5' | 'b6' | 'b7' | 'b8' | 'b9' | 'w' | 'x';
 
 interface MapEditorProps {
   onClose?: () => void;
+  onCitySaved?: () => void; // Callback when a city is saved
 }
 
 const TILE_TYPES: { code: TileCode; name: string; color: string }[] = [
@@ -27,7 +29,7 @@ const TILE_TYPES: { code: TileCode; name: string; color: string }[] = [
   { code: 'x', name: 'Bridge', color: '#444444' },
 ];
 
-export const MapEditor: React.FC<MapEditorProps> = ({ onClose }) => {
+export const MapEditor: React.FC<MapEditorProps> = ({ onClose, onCitySaved }) => {
   const [width, setWidth] = useState(25);
   const [height, setHeight] = useState(25);
   const [selectedTile, setSelectedTile] = useState<TileCode>('g');
@@ -43,6 +45,23 @@ export const MapEditor: React.FC<MapEditorProps> = ({ onClose }) => {
     return initial;
   });
   const [cityName, setCityName] = useState('new-city');
+  const [allCities, setAllCities] = useState<Array<{ id: string; name: string; isCustom: boolean }>>([]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load all cities on mount and reload after saving
+  const refreshCitiesList = useCallback(async () => {
+    try {
+      const cities = await getAllCities();
+      console.log('Refreshing cities list in MapEditor:', cities);
+      setAllCities(cities);
+    } catch (error) {
+      console.error('Failed to refresh cities list:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshCitiesList();
+  }, [refreshCitiesList]);
 
   const handleTileClick = useCallback((x: number, y: number) => {
     setLayout(prev => {
@@ -70,8 +89,8 @@ export const MapEditor: React.FC<MapEditorProps> = ({ onClose }) => {
     setHeight(newHeight);
   }, []);
 
-  const handleLoadCity = useCallback((cityId: CityId) => {
-    const cityData = loadCityById(cityId);
+  const handleLoadCity = useCallback(async (cityId: CityId) => {
+    const cityData = await loadCityById(cityId);
     if (cityData) {
       const result = loadCityFromJSON(cityData);
       if (result) {
@@ -99,6 +118,50 @@ export const MapEditor: React.FC<MapEditorProps> = ({ onClose }) => {
       }
     }
   }, []);
+
+  const handleSaveToGame = useCallback(async () => {
+    if (!cityName || cityName.trim() === '') {
+      Alert.alert('Error', 'Please enter a city name');
+      return;
+    }
+
+    const cityId = cityName.toLowerCase().replace(/\s+/g, '-');
+    const jsonData = {
+      width,
+      height,
+      layout,
+    };
+
+    setIsSaving(true);
+    try {
+      const success = await saveCustomCity(cityId, cityName, jsonData);
+      if (success) {
+        console.log('City saved successfully:', cityId, cityName);
+        // Reload cities list
+        await refreshCitiesList();
+        // Verify it was saved
+        const cities = await getAllCities();
+        console.log('All cities after save:', cities);
+        const savedCity = cities.find(c => c.id === cityId);
+        if (savedCity) {
+          Alert.alert('Success', `City "${cityName}" has been saved and is now available in the city selection!`);
+        } else {
+          Alert.alert('Warning', 'City was saved but not found in list. Please refresh the city selection.');
+        }
+        // Notify parent component that a city was saved
+        if (onCitySaved) {
+          onCitySaved();
+        }
+      } else {
+        Alert.alert('Error', 'Failed to save city. Check console for details.');
+      }
+    } catch (error) {
+      console.error('Failed to save city:', error);
+      Alert.alert('Error', 'Failed to save city');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [width, height, layout, cityName]);
 
   const handleExport = useCallback(() => {
     const jsonData = {
@@ -211,7 +274,14 @@ export const MapEditor: React.FC<MapEditorProps> = ({ onClose }) => {
             <TouchableOpacity style={styles.button} onPress={handleFill}>
               <Text style={styles.buttonText}>Fill All</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.button, styles.primaryButton]} onPress={handleExport}>
+            <TouchableOpacity 
+              style={[styles.button, styles.primaryButton]} 
+              onPress={handleSaveToGame}
+              disabled={isSaving}
+            >
+              <Text style={styles.buttonText}>{isSaving ? 'Saving...' : 'Save to Game'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.button} onPress={handleExport}>
               <Text style={styles.buttonText}>Export JSON</Text>
             </TouchableOpacity>
           </View>
@@ -244,13 +314,18 @@ export const MapEditor: React.FC<MapEditorProps> = ({ onClose }) => {
           <Text style={styles.sectionTitle}>Load Existing City</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.cityGrid}>
-              {AVAILABLE_CITIES.map(city => (
+              {allCities.map(city => (
                 <TouchableOpacity
                   key={city.id}
-                  style={styles.cityButton}
+                  style={[
+                    styles.cityButton,
+                    city.isCustom && styles.cityButtonCustom
+                  ]}
                   onPress={() => handleLoadCity(city.id)}
                 >
-                  <Text style={styles.cityButtonText}>{city.name}</Text>
+                  <Text style={styles.cityButtonText}>
+                    {city.name} {city.isCustom && '★'}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -359,6 +434,7 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 8,
   },
@@ -426,6 +502,10 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingVertical: 8,
     paddingHorizontal: 16,
+  },
+  cityButtonCustom: {
+    borderColor: '#FFD700',
+    backgroundColor: '#4a4a2a',
   },
   cityButtonText: {
     color: '#fff',

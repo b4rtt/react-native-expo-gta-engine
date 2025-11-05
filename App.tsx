@@ -67,9 +67,9 @@ export default function App() {
     };
   }, []);
 
-  const startGame = useCallback((cityId: CityId | null = null) => {
+  const startGame = useCallback(async (cityId: CityId | null = null) => {
     // Load city data if cityId is provided
-    const cityData = cityId ? loadCityById(cityId) : null;
+    const cityData = cityId ? await loadCityById(cityId) : null;
     
     // Initialize game loop only when starting the game
     if (!gameLoopRef.current) {
@@ -330,7 +330,13 @@ export default function App() {
     return (
       <View style={styles.container}>
         <StatusBar hidden />
-        <MapEditor onClose={() => setCurrentScreen('main')} />
+        <MapEditor 
+          onClose={() => setCurrentScreen('main')}
+          onCitySaved={() => {
+            // Force refresh of city list when returning to menu
+            console.log('City saved, will refresh list when returning to menu');
+          }}
+        />
       </View>
     );
   }

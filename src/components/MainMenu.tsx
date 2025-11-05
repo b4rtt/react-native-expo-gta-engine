@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView } from 'react-native';
-import { AVAILABLE_CITIES, CityId } from '../utils/CityFiles';
+import { AVAILABLE_CITIES, CityId, getAllCities } from '../utils/CityFiles';
 
 export type MenuScreen = 'main' | 'options' | 'credits' | 'select-city' | 'map-editor';
 
@@ -24,6 +24,33 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onScreenChange,
 }) => {
   const [selectedCity, setSelectedCity] = useState<CityId | null>(null);
+  const [allCities, setAllCities] = useState<Array<{ id: string; name: string; isCustom: boolean }>>([]);
+
+  // Load all cities (built-in + custom) on mount and when screen changes
+  const loadCities = useCallback(async () => {
+    try {
+      const cities = await getAllCities();
+      console.log('Loaded cities:', cities);
+      setAllCities(cities);
+    } catch (error) {
+      console.error('Failed to load cities:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Always reload cities when entering select-city screen
+    if (currentScreen === 'select-city') {
+      console.log('Loading cities for select-city screen');
+      loadCities();
+    }
+  }, [currentScreen, loadCities]);
+
+  // Also reload when component mounts (if already on select-city screen)
+  useEffect(() => {
+    if (currentScreen === 'select-city') {
+      loadCities();
+    }
+  }, []); // Empty deps - only on mount
 
   const handleScreenChange = (screen: MenuScreen) => {
     if (onScreenChange) {
@@ -39,8 +66,19 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     return (
       <View style={styles.overlay}>
         <View style={styles.menu}>
-          <Text style={styles.title}>SELECT CITY</Text>
-          <Text style={styles.subtitle}>Choose your starting location</Text>
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.title}>SELECT CITY</Text>
+              <Text style={styles.subtitle}>Choose your starting location</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={loadCities}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.refreshButtonText}>🔄</Text>
+            </TouchableOpacity>
+          </View>
           
           <ScrollView style={styles.cityList} contentContainerStyle={styles.cityListContent}>
             <TouchableOpacity
@@ -53,7 +91,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </Text>
             </TouchableOpacity>
             
-            {AVAILABLE_CITIES.map((city) => (
+            {allCities.map((city) => (
               <TouchableOpacity
                 key={city.id}
                 style={[styles.cityButton, selectedCity === city.id && styles.cityButtonSelected]}
@@ -61,7 +99,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 activeOpacity={0.7}
               >
                 <Text style={[styles.cityButtonText, selectedCity === city.id && styles.cityButtonTextSelected]}>
-                  {city.name}
+                  {city.name} {city.isCustom && '★'}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -186,6 +224,26 @@ const styles = StyleSheet.create({
     color: '#888',
     marginBottom: 40,
     letterSpacing: 2,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    width: '100%',
+    marginBottom: 20,
+  },
+  refreshButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#3a3a3a',
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  refreshButtonText: {
+    fontSize: 20,
   },
   button: {
     backgroundColor: '#2a2a2a',
