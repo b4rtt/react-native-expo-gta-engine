@@ -7,7 +7,7 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [x] Implement solid collision for buildings, road edges, and props (axis-aligned grid colliders first, then expand to per-tile flags).
 - [x] Add collectible coins/loot that spawn across the city, update HUD counters, and respawn logically.
 - [x] Introduce NPC pedestrians with simple wandering AI and collision avoidance.
-- [ ] Support entering/exiting vehicles: parked car entities, state transition to driving mode, and vehicle handling model.
+- [x] Support entering/exiting vehicles: parked car entities, state transition to driving mode, and vehicle handling model.
 
 ## Controls & UI
 - [x] Rework the virtual joystick visuals and responsiveness; provide optional keyboard mapping on web.

@@ -76,6 +76,15 @@ export interface Player extends Entity {
   velocity: Vector2;
   maxSpeed: number;
   animation: SpriteAnimation;
+  inVehicle?: string; // ID of vehicle player is in, undefined if on foot
+}
+
+export interface Vehicle extends Entity {
+  velocity: Vector2;
+  maxSpeed: number;
+  parked: boolean; // true if parked, false if being driven
+  color: string; // Vehicle color
+  type: 'car' | 'truck' | 'van';
 }
 
 export interface Camera {
@@ -96,6 +105,7 @@ export interface GameState {
   camera: Camera;
   entities: Entity[];
   npcs: NPC[];
+  vehicles: Vehicle[];
   tiles: Tile[];
   collectibles: Collectible[];
   props: Prop[];

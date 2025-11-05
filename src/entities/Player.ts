@@ -65,8 +65,21 @@ export const updatePlayer = (
   player: Player,
   input: Vector2,
   deltaTime: number,
-  tileLookup: TileLookup
+  tileLookup: TileLookup,
+  vehiclePosition?: Vector2, // Optional: if player is in vehicle, sync position
+  vehicleRotation?: number // Optional: if player is in vehicle, sync rotation
 ): Player => {
+  // If player is in a vehicle, sync position and rotation with vehicle
+  if (player.inVehicle && vehiclePosition && vehicleRotation !== undefined) {
+    return {
+      ...player,
+      position: { ...vehiclePosition },
+      rotation: vehicleRotation,
+      velocity: { x: 0, y: 0 }, // Player doesn't move independently when in vehicle
+      speed: 0,
+    };
+  }
+
   // GTA 2 style physics: responsive but smooth
   const acceleration = 800; // Lower = more gradual speed up
   const deceleration = 1200; // How fast to stop when no input

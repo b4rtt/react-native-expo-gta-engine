@@ -1,14 +1,16 @@
-import { GameState, Vector2, WeaponId } from '../types/Game';
+import { GameState, Vector2, WeaponId, Vehicle } from '../types/Game';
 import { createPlayer, updatePlayer } from '../entities/Player';
 import { createCamera, updateCamera } from './Camera';
 import { generateCityMap } from '../utils/CityMap';
 import { buildTileLookup, TileLookup } from '../utils/TileLookup';
 import { generateCoins, resolveCoinCollection } from '../utils/Collectibles';
 import { spawnNPCsInCity, updateNPC } from '../entities/NPC';
+import { spawnVehiclesInCity, updateVehicle } from '../entities/Vehicle';
 import { generateProps } from '../utils/Props';
 import { TILE_SIZE } from '../utils/Isometric';
 import { serializeGameState, applySaveData, SaveData } from '../utils/SaveData';
 import { Storage, SAVE_KEY_CONSTANT } from '../utils/Storage';
+import { length, subtract } from '../utils/Math';
 
 export class GameLoop {
   private gameState: GameState;
@@ -21,6 +23,9 @@ export class GameLoop {
   private tileLookup: TileLookup;
   private fpsHistory: number[] = [];
   private fpsUpdateInterval: number = 0;
+  private lastExitAttempt: number = 0;
+  private lastExitTime: number = 0; // Track when player last exited a vehicle
+  private pendingExit: boolean = false; // Flag for manual exit request
 
   constructor(onUpdate: (state: GameState) => void) {
     this.onUpdate = onUpdate;
@@ -40,6 +45,9 @@ export class GameLoop {
     // Spawn NPCs across the city
     const npcs = spawnNPCsInCity(30, TILE_SIZE, 15, this.tileLookup);
     
+    // Spawn vehicles parked on roads
+    const vehicles = spawnVehiclesInCity(30, TILE_SIZE, 20, this.tileLookup);
+    
     this.gameState = {
       player: createPlayer(startWorldX, startWorldY),
       camera: createCamera(startWorldX, startWorldY),
@@ -57,6 +65,7 @@ export class GameLoop {
       weapons,
       selectedWeapon: weapons[0],
       npcs,
+      vehicles,
       lastUpdate: 0,
       isPaused: false,
       fps: 0,
@@ -87,6 +96,15 @@ export class GameLoop {
     };
 
     this.onUpdate(this.gameState);
+  }
+
+  exitVehicle() {
+    // Just set a flag - the actual exit will be handled in the next update cycle
+    // This prevents race conditions and state conflicts
+    if (this.gameState.player.inVehicle) {
+      this.pendingExit = true;
+      this.lastExitAttempt = performance.now(); // Allow immediate exit
+    }
   }
 
   pause() {
@@ -164,13 +182,170 @@ export class GameLoop {
       this.fpsUpdateInterval = 0;
     }
 
+    // Handle vehicle entering/exiting
+    let updatedVehicles = [...this.gameState.vehicles];
+    let playerVehicle: Vehicle | undefined;
+    
+    if (this.gameState.player.inVehicle) {
+      // Player is in a vehicle - find it
+      playerVehicle = updatedVehicles.find(v => v.id === this.gameState.player.inVehicle);
+      
+      if (!playerVehicle || playerVehicle.parked) {
+        // Vehicle not found or became parked (shouldn't happen) - exit vehicle
+        const updatedPlayerNoVehicle = {
+          ...this.gameState.player,
+          inVehicle: undefined,
+        };
+        this.gameState = {
+          ...this.gameState,
+          player: updatedPlayerNoVehicle,
+        };
+        playerVehicle = undefined;
+      }
+    } else {
+      // Check if player wants to enter a vehicle
+      // Enter vehicle if: close to parked vehicle, stopped, and near vehicle
+      // Prevent immediate re-entry after exit (0.5 second cooldown)
+      const timeSinceExit = currentTime - this.lastExitTime;
+      const enterDistance = 50; // Distance to enter vehicle
+      const playerSpeed = length(this.gameState.player.velocity);
+      
+      if (playerSpeed < 20 && timeSinceExit > 500) { // Only enter when nearly stopped and after cooldown
+        for (const vehicle of updatedVehicles) {
+          if (vehicle.parked) {
+            const dist = length(subtract(vehicle.position, this.gameState.player.position));
+            if (dist < enterDistance) {
+              // Enter vehicle
+              playerVehicle = vehicle;
+              updatedVehicles = updatedVehicles.map(v =>
+                v.id === vehicle.id ? { ...v, parked: false } : v
+              );
+              break;
+            }
+          }
+        }
+      }
+    }
+    
+    // Update vehicle if player is driving it
+    if (playerVehicle && !playerVehicle.parked) {
+      const vehicleIndex = updatedVehicles.findIndex(v => v.id === playerVehicle!.id);
+      if (vehicleIndex >= 0) {
+        updatedVehicles[vehicleIndex] = updateVehicle(
+          updatedVehicles[vehicleIndex],
+          this.input,
+          deltaTime,
+          this.tileLookup
+        );
+        playerVehicle = updatedVehicles[vehicleIndex];
+      }
+    }
+    
     // Update player (returns new player object)
+    // If in vehicle, sync position/rotation with vehicle
+    // BUT: if pendingExit is set, don't sync with vehicle - prepare for exit
+    const shouldSyncWithVehicle = !this.pendingExit && playerVehicle && !playerVehicle.parked;
+    
     const updatedPlayer = updatePlayer(
-      this.gameState.player,
+      {
+        ...this.gameState.player,
+        inVehicle: playerVehicle?.id,
+      },
       this.input,
       deltaTime,
-      this.tileLookup
+      this.tileLookup,
+      shouldSyncWithVehicle ? playerVehicle?.position : undefined,
+      shouldSyncWithVehicle ? playerVehicle?.rotation : undefined
     );
+    
+    // Check for vehicle exit
+    // Exit when: manual exit requested OR (in vehicle, stopped, and no input for 0.5 seconds)
+    if (updatedPlayer.inVehicle && playerVehicle) {
+      const vehicleSpeed = length(playerVehicle.velocity);
+      const inputLength = length(this.input);
+      
+      // Manual exit (button press) - exit immediately regardless of speed
+      // Auto-exit - only when stopped and no input for 0.5 seconds
+      const shouldExit = this.pendingExit || (vehicleSpeed < 5 && inputLength < 0.1 && (currentTime - this.lastExitAttempt > 500));
+      
+      if (shouldExit) {
+        // If manual exit and vehicle is moving, stop vehicle first
+        if (this.pendingExit && vehicleSpeed > 5) {
+          // Stop the vehicle immediately for safe exit
+          updatedVehicles = updatedVehicles.map(v =>
+            v.id === playerVehicle!.id ? { ...v, velocity: { x: 0, y: 0 }, speed: 0 } : v
+          );
+          playerVehicle = { ...playerVehicle, velocity: { x: 0, y: 0 }, speed: 0 };
+        }
+        // Exit vehicle - set player position slightly offset from vehicle
+        const exitOffset = {
+          x: Math.cos(playerVehicle.rotation + Math.PI / 2) * 30,
+          y: Math.sin(playerVehicle.rotation + Math.PI / 2) * 30,
+        };
+        
+        // Ensure exit position is valid
+        const exitPos = {
+          x: playerVehicle.position.x + exitOffset.x,
+          y: playerVehicle.position.y + exitOffset.y,
+        };
+        
+        // Validate exit position
+        const tileX = Math.floor(exitPos.x / TILE_SIZE);
+        const tileY = Math.floor(exitPos.y / TILE_SIZE);
+        const tile = getTileAt(this.tileLookup, tileX, tileY);
+        
+        let finalExitPos = exitPos;
+        if (tile && (tile.type === 'building' || tile.type === 'water')) {
+          // Try alternative positions
+          const offsets = [
+            { x: Math.cos(playerVehicle.rotation) * 40, y: Math.sin(playerVehicle.rotation) * 40 },
+            { x: Math.cos(playerVehicle.rotation + Math.PI) * 40, y: Math.sin(playerVehicle.rotation + Math.PI) * 40 },
+            { x: Math.cos(playerVehicle.rotation - Math.PI / 2) * 40, y: Math.sin(playerVehicle.rotation - Math.PI / 2) * 40 },
+          ];
+          
+          for (const offset of offsets) {
+            const testPos = {
+              x: playerVehicle.position.x + offset.x,
+              y: playerVehicle.position.y + offset.y,
+            };
+            const testTileX = Math.floor(testPos.x / TILE_SIZE);
+            const testTileY = Math.floor(testPos.y / TILE_SIZE);
+            const testTile = getTileAt(this.tileLookup, testTileX, testTileY);
+            if (testTile && testTile.type !== 'building' && testTile.type !== 'water') {
+              finalExitPos = testPos;
+              break;
+            }
+          }
+          
+          // If still invalid, use vehicle position
+          if (finalExitPos === exitPos && tile && (tile.type === 'building' || tile.type === 'water')) {
+            finalExitPos = { ...playerVehicle.position };
+          }
+        }
+        
+        updatedPlayer = {
+          ...updatedPlayer,
+          inVehicle: undefined,
+          position: finalExitPos,
+          velocity: { x: 0, y: 0 }, // Reset velocity
+          speed: 0,
+        };
+        updatedVehicles = updatedVehicles.map(v =>
+          v.id === playerVehicle!.id ? { ...v, parked: true } : v
+        );
+        playerVehicle = undefined;
+        this.lastExitAttempt = currentTime; // Reset timer after exit
+        this.lastExitTime = currentTime; // Track exit time for cooldown
+        this.pendingExit = false; // Clear exit flag
+      } else {
+        // Reset exit timer if vehicle is moving or player is giving input
+        this.lastExitAttempt = currentTime;
+      }
+    } else {
+      // Reset exit timer when not in vehicle
+      this.lastExitAttempt = currentTime;
+      this.pendingExit = false; // Clear exit flag if somehow set
+    }
 
     // Update each NPC individually with improved collision avoidance
     const updatedNPCs = this.gameState.npcs.map((npc) =>
@@ -217,6 +392,7 @@ export class GameLoop {
       collectibles: updatedCollectibles,
       stats: updatedStats,
       npcs: updatedNPCs,
+      vehicles: updatedVehicles,
       lastUpdate: currentTime,
       fps: avgFPS,
     };

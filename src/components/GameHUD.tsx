@@ -18,6 +18,8 @@ interface GameHUDProps {
   weapons: WeaponId[];
   selectedWeapon: WeaponId;
   onWeaponSelect: (weapon: WeaponId) => void;
+  isInVehicle?: boolean;
+  onExitVehicle?: () => void;
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
@@ -25,9 +27,21 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   weapons,
   selectedWeapon,
   onWeaponSelect,
+  isInVehicle = false,
+  onExitVehicle,
 }) => {
   return (
     <View style={styles.container} pointerEvents="box-none">
+      {/* Exit vehicle button */}
+      {isInVehicle && onExitVehicle && (
+        <TouchableOpacity
+          style={styles.exitVehicleButton}
+          onPress={onExitVehicle}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.exitVehicleText}>🚪 Vystoupit</Text>
+        </TouchableOpacity>
+      )}
       <View style={styles.topRightContainer} pointerEvents="none">
         <View style={styles.healthContainer}>
           <View style={styles.healthBarBackground}>
@@ -190,5 +204,24 @@ const styles = StyleSheet.create({
   },
   weaponEmoji: {
     fontSize: 34,
+  },
+  exitVehicleButton: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    backgroundColor: 'rgba(200, 50, 50, 0.85)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  exitVehicleText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
 });

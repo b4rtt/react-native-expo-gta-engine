@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Canvas, Circle, Group, RoundedRect, Rect } from '@shopify/react-native-skia';
-import { GameState, Tile, Collectible, NPC, Prop, PropType } from '../types/Game';
+import { GameState, Tile, Collectible, NPC, Prop, PropType, Vehicle } from '../types/Game';
 import { IsometricGrass } from './IsometricGrass';
 import { IsometricRoad, RoadNeighbors } from './IsometricRoad';
 import { IsometricBuilding } from './IsometricBuilding';
@@ -47,12 +47,20 @@ interface ProjectedProp {
   depth: number;
 }
 
+interface ProjectedVehicle {
+  vehicle: Vehicle;
+  screenX: number;
+  screenY: number;
+  depth: number;
+}
+
 interface ProjectedScene {
   tiles: ProjectedTile[];
   playerScreenPos: { x: number; y: number };
   coins: ProjectedCoin[];
   npcs: ProjectedNPC[];
   props: ProjectedProp[];
+  vehicles: ProjectedVehicle[];
 }
 
 const CULL_MARGIN = TILE_SIZE * 2;
@@ -69,7 +77,7 @@ const useProjectedScene = (
   width: number,
   height: number
 ): ProjectedScene => {
-  const { player, tiles, collectibles, npcs, props } = gameState;
+  const { player, tiles, collectibles, npcs, props, vehicles } = gameState;
   const playerX = player.position.x;
   const playerY = player.position.y;
 
@@ -90,6 +98,7 @@ const useProjectedScene = (
     const projectedTiles: ProjectedTile[] = [];
     const projectedCoins: ProjectedCoin[] = [];
     const projectedNPCs: ProjectedNPC[] = [];
+    const projectedVehicles: ProjectedVehicle[] = [];
 
     for (const tile of tiles) {
       const worldPos = { x: tile.x * TILE_SIZE, y: tile.y * TILE_SIZE, z: 0 };
@@ -220,14 +229,39 @@ const useProjectedScene = (
       });
     }
 
+    // Project vehicles
+    for (const vehicle of vehicles) {
+      const iso = worldToIsometric({ x: vehicle.position.x, y: vehicle.position.y, z: 0 });
+      const screenX = iso.x - playerIso.x + halfWidth;
+      const screenY = iso.y - playerIso.y + halfHeight;
+      const radius = vehicle.size / 2;
+
+      if (
+        screenX + radius < -CULL_MARGIN ||
+        screenX - radius > width + CULL_MARGIN ||
+        screenY + radius < -CULL_MARGIN ||
+        screenY - radius > height + CULL_MARGIN
+      ) {
+        continue;
+      }
+
+      projectedVehicles.push({
+        vehicle,
+        screenX,
+        screenY,
+        depth: vehicle.position.x + vehicle.position.y,
+      });
+    }
+
     return {
       tiles: projectedTiles,
       playerScreenPos,
       coins: projectedCoins,
       npcs: projectedNPCs,
       props: projectedProps,
+      vehicles: projectedVehicles,
     };
-  }, [tiles, collectibles, npcs, props, playerX, playerY, width, height]);
+  }, [tiles, collectibles, npcs, props, vehicles, playerX, playerY, width, height]);
 };
 
 export const GameRenderer: React.FC<GameRendererProps> = (props) => {
@@ -243,6 +277,7 @@ type RenderItem =
   | { kind: 'coin'; depth: number; coin: ProjectedCoin }
   | { kind: 'npc'; depth: number; npc: ProjectedNPC }
   | { kind: 'prop'; depth: number; prop: ProjectedProp }
+  | { kind: 'vehicle'; depth: number; vehicle: ProjectedVehicle }
   | { kind: 'player'; depth: number };
 
 const buildRenderQueue = (
@@ -250,6 +285,7 @@ const buildRenderQueue = (
   coins: ProjectedCoin[],
   npcs: ProjectedNPC[],
   props: ProjectedProp[],
+  vehicles: ProjectedVehicle[],
   playerScreenY: number
 ): RenderItem[] => {
   const queue: RenderItem[] = [];
@@ -273,6 +309,10 @@ const buildRenderQueue = (
     queue.push({ kind: 'prop', depth: prop.screenY, prop });
   }
 
+  for (const vehicle of vehicles) {
+    queue.push({ kind: 'vehicle', depth: vehicle.screenY, vehicle });
+  }
+
   queue.push({ kind: 'player', depth: playerScreenY });
 
   queue.sort((a, b) => a.depth - b.depth);
@@ -285,15 +325,15 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, coins, npcs, props, playerScreenPos } = useProjectedScene(
+  const { tiles, coins, npcs, props, vehicles, playerScreenPos } = useProjectedScene(
     gameState,
     width,
     height
   );
 
   const renderQueue = useMemo(
-    () => buildRenderQueue(tiles, coins, npcs, props, playerScreenPos.y),
-    [tiles, coins, npcs, props, playerScreenPos.y]
+    () => buildRenderQueue(tiles, coins, npcs, props, vehicles, playerScreenPos.y),
+    [tiles, coins, npcs, props, vehicles, playerScreenPos.y]
   );
 
   return (
@@ -396,6 +436,10 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
               const { prop, screenX, screenY } = item.prop;
               return renderSkiaProp(prop.type, screenX, screenY, index);
             }
+            case 'vehicle': {
+              const { vehicle, screenX, screenY } = item.vehicle;
+              return renderSkiaVehicle(vehicle, screenX, screenY, index);
+            }
             case 'player':
               return (
                 <PlayerSprite
@@ -418,15 +462,15 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
   height,
 }) => {
   const { player } = gameState;
-  const { tiles, coins, npcs, props, playerScreenPos } = useProjectedScene(
+  const { tiles, coins, npcs, props, vehicles, playerScreenPos } = useProjectedScene(
     gameState,
     width,
     height
   );
 
   const renderQueue = useMemo(
-    () => buildRenderQueue(tiles, coins, npcs, props, playerScreenPos.y),
-    [tiles, coins, npcs, props, playerScreenPos.y]
+    () => buildRenderQueue(tiles, coins, npcs, props, vehicles, playerScreenPos.y),
+    [tiles, coins, npcs, props, vehicles, playerScreenPos.y]
   );
 
   return (
@@ -458,6 +502,10 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
           case 'prop': {
             const { prop, screenX, screenY } = item.prop;
             return renderWebProp(prop, screenX, screenY, index);
+          }
+          case 'vehicle': {
+            const { vehicle, screenX, screenY } = item.vehicle;
+            return renderWebVehicle(vehicle, screenX, screenY, index);
           }
           case 'player':
             return (
@@ -1157,6 +1205,65 @@ const renderWebNPC = (npc: NPC, screenX: number, screenY: number, radius: number
   />
 );
 
+const renderSkiaVehicle = (vehicle: Vehicle, screenX: number, screenY: number, key: number) => {
+  const halfWidth = vehicle.size / 2;
+  const halfHeight = vehicle.size * 0.6 / 2; // Vehicle is taller than wide
+  const shadowOffset = 3;
+  
+  return (
+    <Group key={`vehicle-${vehicle.id}-${key}`}>
+      {/* Shadow - simple offset rectangle */}
+      <Rect
+        x={screenX - halfWidth + shadowOffset}
+        y={screenY - halfHeight + shadowOffset}
+        width={vehicle.size}
+        height={vehicle.size * 0.6}
+        color="rgba(0,0,0,0.3)"
+      />
+      
+      {/* Vehicle body - rotated group */}
+      <Group
+        transform={[
+          { translateX: screenX },
+          { translateY: screenY },
+          { rotate: vehicle.rotation },
+          { translateX: -screenX },
+          { translateY: -screenY },
+        ]}
+      >
+        {/* Vehicle body */}
+        <Rect
+          x={screenX - halfWidth}
+          y={screenY - halfHeight}
+          width={vehicle.size}
+          height={vehicle.size * 0.6}
+          color={vehicle.color}
+        />
+        
+        {/* Vehicle outline */}
+        <Rect
+          x={screenX - halfWidth}
+          y={screenY - halfHeight}
+          width={vehicle.size}
+          height={vehicle.size * 0.6}
+          color="#000000"
+          style="stroke"
+          strokeWidth={2}
+        />
+        
+        {/* Windshield */}
+        <Rect
+          x={screenX - halfWidth * 0.6}
+          y={screenY - halfHeight * 0.5}
+          width={vehicle.size * 0.5}
+          height={vehicle.size * 0.15}
+          color="#7fb3d3"
+        />
+      </Group>
+    </Group>
+  );
+};
+
 const renderSkiaProp = (propType: PropType, screenX: number, screenY: number, key: number) => {
   const size = 20; // Default prop size
   const halfSize = size / 2;
@@ -1235,6 +1342,53 @@ const renderSkiaProp = (propType: PropType, screenX: number, screenY: number, ke
     default:
       return null;
   }
+};
+
+const renderWebVehicle = (vehicle: Vehicle, screenX: number, screenY: number, key: number) => {
+  const halfWidth = vehicle.size / 2;
+  const halfHeight = vehicle.size * 0.6 / 2;
+  
+  return (
+    <View
+      key={`vehicle-${vehicle.id}-${key}`}
+      style={{
+        position: 'absolute',
+        left: screenX - halfWidth,
+        top: screenY - halfHeight,
+        width: vehicle.size,
+        height: vehicle.size * 0.6,
+        backgroundColor: vehicle.color,
+        borderWidth: 2,
+        borderColor: '#000000',
+        transform: [{ rotate: `${vehicle.rotation}rad` }],
+      }}
+    >
+      {/* Windshield */}
+      <View
+        style={{
+          position: 'absolute',
+          left: halfWidth * 0.4,
+          top: halfHeight * 0.2,
+          width: vehicle.size * 0.5,
+          height: vehicle.size * 0.15,
+          backgroundColor: '#7fb3d3',
+          borderRadius: 2,
+        }}
+      />
+      {/* Vehicle shadow */}
+      <View
+        style={{
+          position: 'absolute',
+          left: 3,
+          top: 3,
+          width: vehicle.size,
+          height: vehicle.size * 0.6,
+          backgroundColor: 'rgba(0,0,0,0.3)',
+          zIndex: -1,
+        }}
+      />
+    </View>
+  );
 };
 
 const renderWebProp = (prop: Prop, screenX: number, screenY: number, key: number) => {

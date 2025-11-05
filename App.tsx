@@ -334,6 +334,12 @@ export default function App() {
         weapons={gameState.weapons}
         selectedWeapon={gameState.selectedWeapon}
         onWeaponSelect={handleWeaponSelect}
+        isInVehicle={!!gameState.player.inVehicle}
+        onExitVehicle={() => {
+          if (gameLoopRef.current) {
+            gameLoopRef.current.exitVehicle();
+          }
+        }}
       />
       <VirtualJoystick onInputChange={handleJoystickInputChange} />
       
