@@ -5,6 +5,8 @@ import { GameState, Tile, Collectible, NPC, Prop, PropType } from '../types/Game
 import { IsometricGrass } from './IsometricGrass';
 import { IsometricRoad, RoadNeighbors } from './IsometricRoad';
 import { IsometricBuilding } from './IsometricBuilding';
+import { IsometricWater } from './IsometricWater';
+import { IsometricBridge } from './IsometricBridge';
 import { computeBuildingStyle } from '../utils/BuildingStyle';
 import { worldToIsometric, TILE_SIZE } from '../utils/Isometric';
 
@@ -299,6 +301,27 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
           switch (item.kind) {
             case 'surface': {
               const { tile, screenX, screenY, neighbors } = item.tile;
+              if (tile.type === 'water') {
+                return (
+                  <IsometricWater
+                    key={`water-${tile.x}-${tile.y}-${index}`}
+                    tile={tile}
+                    screenX={screenX}
+                    screenY={screenY}
+                  />
+                );
+              }
+              if (tile.type === 'bridge') {
+                return (
+                  <IsometricBridge
+                    key={`bridge-${tile.x}-${tile.y}-${index}`}
+                    tile={tile}
+                    screenX={screenX}
+                    screenY={screenY}
+                    neighbors={neighbors}
+                  />
+                );
+              }
               if (tile.type === 'grass' || tile.type === 'pavement' || tile.type === 'building') {
                 return (
                   <IsometricGrass
@@ -411,6 +434,12 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
         switch (item.kind) {
           case 'surface': {
             const { tile, screenX, screenY, neighbors } = item.tile;
+            if (tile.type === 'water') {
+              return renderWebWater(tile, screenX, screenY, index);
+            }
+            if (tile.type === 'bridge') {
+              return renderWebBridge(tile, screenX, screenY, neighbors, index);
+            }
             return renderWebSurface(tile, screenX, screenY, neighbors, index);
           }
           case 'building': {
@@ -541,6 +570,259 @@ const renderTrafficLight = (
         />
       </View>
     </>
+  );
+};
+
+const WATER_COLORS_WEB = ['#2a5a7a', '#2d5d7d', '#28587a', '#2c5b7c'];
+const WATER_HIGHLIGHT_WEB = '#3a7a9a';
+const WATER_DARK_WEB = '#1a4a6a';
+
+const WaterTile: React.FC<{ tile: Tile; screenX: number; screenY: number; key: number }> = ({
+  tile,
+  screenX,
+  screenY,
+  key,
+}) => {
+  const seed = tile.x * 73 + tile.y * 37;
+  const colorVariant = seed % WATER_COLORS_WEB.length;
+  const baseColor = WATER_COLORS_WEB[colorVariant];
+  const [time, setTime] = React.useState(0);
+  
+  React.useEffect(() => {
+    let animationFrame: number;
+    const startTime = performance.now();
+    
+    const animate = () => {
+      const currentTime = performance.now();
+      setTime((currentTime - startTime) / 1000);
+      animationFrame = requestAnimationFrame(animate);
+    };
+    
+    animate();
+    return () => cancelAnimationFrame(animationFrame);
+  }, []);
+  
+  // Animated wave positions
+  const waveSpeed1 = 0.5 + (seed % 10) / 20;
+  const waveSpeed2 = 0.8 + (seed % 7) / 15;
+  const waveSpeed3 = 0.3 + (seed % 13) / 25;
+  
+  const wave1Y = TILE_SIZE * 0.2 + Math.sin(time * waveSpeed1 + seed * 0.1) * 3;
+  const wave2Y = TILE_SIZE * 0.5 + Math.sin(time * waveSpeed2 + seed * 0.15 + Math.PI / 3) * 2.5;
+  const wave3Y = TILE_SIZE * 0.7 + Math.sin(time * waveSpeed3 + seed * 0.2 + Math.PI / 2) * 2;
+  
+  const wave1X = Math.sin(time * 0.4 + seed * 0.05) * 2;
+  const wave2X = Math.sin(time * 0.6 + seed * 0.08 + Math.PI / 4) * 1.5;
+  
+  const shimmerOpacity = 0.3 + Math.sin(time * 2 + seed * 0.1) * 0.15;
+  const highlightOpacity = 0.4 + Math.sin(time * 1.5 + seed * 0.12) * 0.2;
+  
+  return (
+    <View
+      key={`water-${tile.x}-${tile.y}-${key}`}
+      style={[
+        webStyles.tileBase,
+        {
+          left: screenX,
+          top: screenY,
+          backgroundColor: baseColor,
+        },
+      ]}
+    >
+      {/* Darker water layer for depth */}
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: TILE_SIZE * 0.6,
+          width: TILE_SIZE,
+          height: TILE_SIZE * 0.4,
+          backgroundColor: WATER_DARK_WEB,
+          opacity: 0.3,
+        }}
+      />
+      
+      {/* Animated wave 1 */}
+      <View
+        style={{
+          position: 'absolute',
+          left: wave1X,
+          top: wave1Y,
+          width: TILE_SIZE,
+          height: TILE_SIZE * 0.25,
+          backgroundColor: WATER_HIGHLIGHT_WEB,
+          opacity: highlightOpacity,
+        }}
+      />
+      
+      {/* Animated wave 2 */}
+      <View
+        style={{
+          position: 'absolute',
+          left: wave2X,
+          top: wave2Y,
+          width: TILE_SIZE * 0.8,
+          height: TILE_SIZE * 0.2,
+          backgroundColor: WATER_HIGHLIGHT_WEB,
+          opacity: shimmerOpacity,
+        }}
+      />
+      
+      {/* Animated wave 3 */}
+      <View
+        style={{
+          position: 'absolute',
+          left: TILE_SIZE * 0.1,
+          top: wave3Y,
+          width: TILE_SIZE * 0.7,
+          height: TILE_SIZE * 0.15,
+          backgroundColor: WATER_HIGHLIGHT_WEB,
+          opacity: 0.25 + Math.sin(time * 1.2 + seed * 0.1) * 0.1,
+        }}
+      />
+      
+      {/* Shimmer/reflection effect */}
+      <View
+        style={{
+          position: 'absolute',
+          left: TILE_SIZE * 0.3,
+          top: TILE_SIZE * 0.15 + Math.sin(time * 1.8 + seed * 0.2) * 2,
+          width: TILE_SIZE * 0.4,
+          height: TILE_SIZE * 0.3,
+          backgroundColor: '#4a9aba',
+          opacity: 0.2 + Math.sin(time * 2.5 + seed * 0.15) * 0.15,
+        }}
+      />
+    </View>
+  );
+};
+
+const renderWebWater = (tile: Tile, screenX: number, screenY: number, key: number) => {
+  return <WaterTile tile={tile} screenX={screenX} screenY={screenY} key={key} />;
+};
+
+const renderWebBridge = (
+  tile: Tile,
+  screenX: number,
+  screenY: number,
+  neighbors: RoadNeighbors,
+  key: number
+) => {
+  const isHorizontal = neighbors.left || neighbors.right;
+  const bridgeWidth = isHorizontal ? TILE_SIZE : TILE_SIZE * 0.6;
+  const bridgeHeight = isHorizontal ? TILE_SIZE * 0.6 : TILE_SIZE;
+  const bridgeX = isHorizontal ? 0 : (TILE_SIZE - bridgeWidth) / 2;
+  const bridgeY = isHorizontal ? (TILE_SIZE - bridgeHeight) / 2 : 0;
+  const BRIDGE_COLOR = '#4a4a4a';
+  const BRIDGE_BORDER = '#3a3a3a';
+  const WATER_COLOR = '#2a5a7a';
+
+  return (
+    <View
+      key={`bridge-${tile.x}-${tile.y}-${key}`}
+      style={[
+        webStyles.tileBase,
+        {
+          left: screenX,
+          top: screenY,
+        },
+      ]}
+    >
+      {/* Water background */}
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: TILE_SIZE,
+          height: TILE_SIZE,
+          backgroundColor: WATER_COLOR,
+        }}
+      />
+      
+      {/* Bridge deck */}
+      <View
+        style={{
+          position: 'absolute',
+          left: bridgeX,
+          top: bridgeY,
+          width: bridgeWidth,
+          height: bridgeHeight,
+          backgroundColor: BRIDGE_COLOR,
+          borderWidth: 2,
+          borderColor: BRIDGE_BORDER,
+        }}
+      />
+      
+      {/* Bridge planks/segments */}
+      {isHorizontal ? (
+        <>
+          <View
+            style={{
+              position: 'absolute',
+              left: bridgeX + bridgeWidth * 0.25,
+              top: bridgeY,
+              width: 2,
+              height: bridgeHeight,
+              backgroundColor: BRIDGE_BORDER,
+            }}
+          />
+          <View
+            style={{
+              position: 'absolute',
+              left: bridgeX + bridgeWidth * 0.5,
+              top: bridgeY,
+              width: 2,
+              height: bridgeHeight,
+              backgroundColor: BRIDGE_BORDER,
+            }}
+          />
+          <View
+            style={{
+              position: 'absolute',
+              left: bridgeX + bridgeWidth * 0.75,
+              top: bridgeY,
+              width: 2,
+              height: bridgeHeight,
+              backgroundColor: BRIDGE_BORDER,
+            }}
+          />
+        </>
+      ) : (
+        <>
+          <View
+            style={{
+              position: 'absolute',
+              left: bridgeX,
+              top: bridgeY + bridgeHeight * 0.25,
+              width: bridgeWidth,
+              height: 2,
+              backgroundColor: BRIDGE_BORDER,
+            }}
+          />
+          <View
+            style={{
+              position: 'absolute',
+              left: bridgeX,
+              top: bridgeY + bridgeHeight * 0.5,
+              width: bridgeWidth,
+              height: 2,
+              backgroundColor: BRIDGE_BORDER,
+            }}
+          />
+          <View
+            style={{
+              position: 'absolute',
+              left: bridgeX,
+              top: bridgeY + bridgeHeight * 0.75,
+              width: bridgeWidth,
+              height: 2,
+              backgroundColor: BRIDGE_BORDER,
+            }}
+          />
+        </>
+      )}
+    </View>
   );
 };
 

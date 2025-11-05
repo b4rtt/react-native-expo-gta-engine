@@ -62,11 +62,121 @@ const getRoadConnections = (x: number, y: number): RoadConnection => {
   };
 };
 
+const waterMap = new Map<string, boolean>();
+
+const isWater = (x: number, y: number): boolean => {
+  return waterMap.has(`${x},${y}`);
+};
+
+const createWaterBodies = (width: number, height: number) => {
+  waterMap.clear();
+  
+  // Main horizontal river - curves slightly for more organic feel
+  const baseRiverY = Math.floor(height * 0.35);
+  const riverWidth = 2; // 2 tiles wide
+  
+  for (let x = 0; x < width; x++) {
+    // Add slight sine wave curve to make river more natural
+    const curveOffset = Math.floor(Math.sin(x * 0.15) * 1.5);
+    const riverY = baseRiverY + curveOffset;
+    
+    // Variable width - wider in some sections
+    const localWidth = (x % 20 < 5) ? 3 : riverWidth; // Wider every ~20 tiles
+    
+    for (let dy = 0; dy < localWidth; dy++) {
+      const y = riverY + dy;
+      if (y >= 0 && y < height) {
+        // Skip where roads cross (bridges will be added)
+        if (!isRoad(x, y)) {
+          waterMap.set(`${x},${y}`, true);
+        }
+      }
+    }
+  }
+  
+  // Vertical canal/river on the right side - connects to horizontal river
+  const verticalCanalX = Math.floor(width * 0.65);
+  const verticalCanalWidth = 2;
+  const connectionY = baseRiverY; // Connect to horizontal river
+  
+  for (let y = 0; y < height; y++) {
+    // Add slight curve
+    const curveOffset = Math.floor(Math.sin(y * 0.12) * 1);
+    const canalX = verticalCanalX + curveOffset;
+    
+    for (let dx = 0; dx < verticalCanalWidth; dx++) {
+      const x = canalX + dx;
+      if (x >= 0 && x < width) {
+        // Skip where roads cross, but connect to horizontal river
+        if (!isRoad(x, y) || (y >= connectionY - 1 && y <= connectionY + 2)) {
+          waterMap.set(`${x},${y}`, true);
+        }
+      }
+    }
+  }
+  
+  // Smaller canal on the left side - also connects to main river
+  const leftCanalX = Math.floor(width * 0.3);
+  const leftCanalWidth = 1;
+  const leftCanalStartY = Math.floor(height * 0.5);
+  const leftCanalLength = Math.floor(height * 0.25);
+  const leftConnectionY = baseRiverY;
+  
+  for (let y = leftCanalStartY; y < leftCanalStartY + leftCanalLength; y++) {
+    // Curve toward connection point
+    const progress = (y - leftCanalStartY) / leftCanalLength;
+    const curveOffset = Math.floor((leftConnectionY - leftCanalStartY) * progress * 0.3);
+    
+    for (let dx = 0; dx < leftCanalWidth; dx++) {
+      const x = leftCanalX + dx;
+      const adjustedY = y + curveOffset;
+      if (x >= 0 && x < width && adjustedY >= 0 && adjustedY < height) {
+        if (!isRoad(x, adjustedY)) {
+          waterMap.set(`${x},${adjustedY}`, true);
+        }
+      }
+    }
+  }
+  
+  // Connect left canal to main river
+  for (let x = leftCanalX; x <= Math.floor(width * 0.4); x++) {
+    const y = leftConnectionY;
+    if (x >= 0 && x < width && y >= 0 && y < height) {
+      if (!isRoad(x, y)) {
+        waterMap.set(`${x},${y}`, true);
+      }
+    }
+  }
+  
+  // Expand water slightly at connection points for natural look
+  const expandWater = (x: number, y: number, radius: number) => {
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist <= radius && !isRoad(nx, ny)) {
+            waterMap.set(`${nx},${ny}`, true);
+          }
+        }
+      }
+    }
+  };
+  
+  // Expand at river junctions
+  expandWater(Math.floor(width * 0.65), baseRiverY, 1);
+  expandWater(Math.floor(width * 0.4), baseRiverY, 1);
+};
+
 export const generateCityMap = (width: number, height: number): Tile[] => {
   const tiles: Tile[] = [];
   
   // First create road network
   createRoadNetwork(width, height);
+  
+  // Then create water bodies
+  createWaterBodies(width, height);
 
   // Create a grid of tiles
   for (let y = 0; y < height; y++) {
@@ -74,6 +184,22 @@ export const generateCityMap = (width: number, height: number): Tile[] => {
       let type: TileType = 'grass';
       const seed = x * 73 + y * 37;
       const distFromCenter = Math.sqrt((x - width/2) ** 2 + (y - height/2) ** 2);
+      
+      // Check if this is water
+      if (isWater(x, y)) {
+        // If road crosses water, make it a bridge
+        if (isRoad(x, y)) {
+          type = 'bridge';
+        } else {
+          type = 'water';
+        }
+        tiles.push({
+          x,
+          y,
+          type,
+        });
+        continue;
+      }
       
       // Check if this is a road
       if (isRoad(x, y)) {

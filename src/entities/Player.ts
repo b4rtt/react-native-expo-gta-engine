@@ -9,7 +9,7 @@ import {
 import { TileLookup, getTileAt } from '../utils/TileLookup';
 import { TILE_SIZE } from '../utils/Isometric';
 
-const BLOCKING_TILE_TYPES: TileType[] = ['building'];
+const BLOCKING_TILE_TYPES: TileType[] = ['building', 'water'];
 
 const isBlockingTile = (tileType?: TileType): boolean => {
   if (!tileType) {

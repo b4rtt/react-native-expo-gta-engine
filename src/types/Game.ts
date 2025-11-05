@@ -9,7 +9,7 @@ export interface Vector3 {
   z: number;
 }
 
-export type TileType = 'grass' | 'pavement' | 'road' | 'building';
+export type TileType = 'grass' | 'pavement' | 'road' | 'building' | 'water' | 'bridge';
 
 export type RoadConnection = {
   north: boolean;
