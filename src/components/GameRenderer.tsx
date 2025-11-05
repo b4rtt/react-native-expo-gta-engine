@@ -11,6 +11,7 @@ import { PlayerSprite } from './PlayerSprite';
 import { PlayerSpriteWeb } from './PlayerSpriteWeb';
 import { computeBuildingStyle } from '../utils/BuildingStyle';
 import { worldToIsometric, TILE_SIZE } from '../utils/Isometric';
+import { getTimeOfDayTint, getAmbientLightColor } from '../utils/TimeOfDay';
 
 interface GameRendererProps {
   gameState: GameState;
@@ -64,11 +65,29 @@ interface ProjectedScene {
 }
 
 const CULL_MARGIN = TILE_SIZE * 2;
-const GRASS_COLORS = ['#3d6b34', '#4a7c3f', '#416e38'];
-const PAVEMENT_COLORS = ['#5b5b5b', '#616161', '#585858'];
-const COIN_COLOR = '#f7d64c';
-const COIN_OUTLINE = '#cfa12f';
-const COIN_HIGHLIGHT = '#fff2a6';
+const GRASS_COLORS_BASE = ['#3d6b34', '#4a7c3f', '#416e38'];
+const PAVEMENT_COLORS_BASE = ['#5b5b5b', '#616161', '#585858'];
+const COIN_COLOR_BASE = '#f7d64c';
+const COIN_OUTLINE_BASE = '#cfa12f';
+const COIN_HIGHLIGHT_BASE = '#fff2a6';
+
+/**
+ * Apply time of day tint to a hex color
+ */
+const applyTintToColor = (hexColor: string, tint: { r: number; g: number; b: number }): string => {
+  // Remove # if present
+  const hex = hexColor.replace('#', '');
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+  
+  // Apply tint
+  const newR = Math.floor(Math.min(255, r * tint.r));
+  const newG = Math.floor(Math.min(255, g * tint.g));
+  const newB = Math.floor(Math.min(255, b * tint.b));
+  
+  return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+};
 
 const tileKey = (x: number, y: number) => `${x},${y}`;
 
@@ -336,8 +355,27 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
     [tiles, coins, npcs, props, vehicles, playerScreenPos.y]
   );
 
+  // Get time of day tint and ambient light
+  const timeTint = getTimeOfDayTint(gameState.timeOfDay);
+  const ambientLight = getAmbientLightColor(gameState.timeOfDay);
+  
+  // Apply tint to base colors
+  const GRASS_COLORS = GRASS_COLORS_BASE.map(c => applyTintToColor(c, timeTint));
+  const PAVEMENT_COLORS = PAVEMENT_COLORS_BASE.map(c => applyTintToColor(c, timeTint));
+  const COIN_COLOR = applyTintToColor(COIN_COLOR_BASE, timeTint);
+  const COIN_OUTLINE = applyTintToColor(COIN_OUTLINE_BASE, timeTint);
+  const COIN_HIGHLIGHT = applyTintToColor(COIN_HIGHLIGHT_BASE, timeTint);
+  
+  // Apply tint to background color
+  const bgR = Math.floor(26 * timeTint.r);
+  const bgG = Math.floor(26 * timeTint.g);
+  const bgB = Math.floor(26 * timeTint.b);
+  const backgroundColor = `rgb(${bgR}, ${bgG}, ${bgB})`;
+  
   return (
-    <Canvas style={{ width, height, backgroundColor: '#1a1a1a' }}>
+    <Canvas style={{ width, height, backgroundColor }}>
+      {/* Ambient light overlay */}
+      <Rect x={0} y={0} width={width} height={height} color={ambientLight} />
       <Group>
         {renderQueue.map((item, index) => {
           switch (item.kind) {
@@ -473,8 +511,37 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
     [tiles, coins, npcs, props, vehicles, playerScreenPos.y]
   );
 
+  // Get time of day tint and ambient light
+  const timeTint = getTimeOfDayTint(gameState.timeOfDay);
+  const ambientLight = getAmbientLightColor(gameState.timeOfDay);
+  
+  // Apply tint to base colors
+  const GRASS_COLORS = GRASS_COLORS_BASE.map(c => applyTintToColor(c, timeTint));
+  const PAVEMENT_COLORS = PAVEMENT_COLORS_BASE.map(c => applyTintToColor(c, timeTint));
+  const COIN_COLOR = applyTintToColor(COIN_COLOR_BASE, timeTint);
+  const COIN_OUTLINE = applyTintToColor(COIN_OUTLINE_BASE, timeTint);
+  const COIN_HIGHLIGHT = applyTintToColor(COIN_HIGHLIGHT_BASE, timeTint);
+  
+  // Apply tint to background color
+  const bgR = Math.floor(26 * timeTint.r);
+  const bgG = Math.floor(26 * timeTint.g);
+  const bgB = Math.floor(26 * timeTint.b);
+  const backgroundColor = `rgb(${bgR}, ${bgG}, ${bgB})`;
+  
   return (
-    <View style={[webStyles.root, { width, height }]}> 
+    <View style={[webStyles.root, { width, height, backgroundColor }]}> 
+      {/* Ambient light overlay */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: ambientLight,
+          pointerEvents: 'none',
+        }}
+      />
       {renderQueue.map((item, index) => {
         switch (item.kind) {
           case 'surface': {
@@ -485,7 +552,7 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
             if (tile.type === 'bridge') {
               return renderWebBridge(tile, screenX, screenY, neighbors, index);
             }
-            return renderWebSurface(tile, screenX, screenY, neighbors, index);
+            return renderWebSurface(tile, screenX, screenY, neighbors, index, GRASS_COLORS, PAVEMENT_COLORS);
           }
           case 'building': {
             const { tile, screenX, screenY } = item.tile;
@@ -493,7 +560,7 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
           }
           case 'coin': {
             const { coin, screenX, screenY } = item.coin;
-            return renderWebCoin(coin, screenX, screenY, index);
+            return renderWebCoin(coin, screenX, screenY, index, COIN_COLOR, COIN_OUTLINE, COIN_HIGHLIGHT);
           }
           case 'npc': {
             const { npc, screenX, screenY, radius } = item.npc;
@@ -872,11 +939,13 @@ const renderWebSurface = (
   screenX: number,
   screenY: number,
   neighbors: RoadNeighbors,
-  key: number
+  key: number,
+  grassColors: string[] = GRASS_COLORS_BASE,
+  pavementColors: string[] = PAVEMENT_COLORS_BASE
 ) => {
   if (tile.type === 'grass' || tile.type === 'pavement' || tile.type === 'building') {
     // Buildings should have pavement underneath
-    const palette = (tile.type === 'pavement' || tile.type === 'building') ? PAVEMENT_COLORS : GRASS_COLORS;
+    const palette = (tile.type === 'pavement' || tile.type === 'building') ? pavementColors : grassColors;
     const colorVariant = (tile.x + tile.y) % palette.length;
     const baseColor = palette[colorVariant];
     
@@ -1161,7 +1230,15 @@ const renderWebBuilding = (tile: Tile, screenX: number, screenY: number, key: nu
   );
 };
 
-const renderWebCoin = (coin: Collectible, screenX: number, screenY: number, key: number) => (
+const renderWebCoin = (
+  coin: Collectible,
+  screenX: number,
+  screenY: number,
+  key: number,
+  coinColor: string = COIN_COLOR_BASE,
+  coinOutline: string = COIN_OUTLINE_BASE,
+  coinHighlight: string = COIN_HIGHLIGHT_BASE
+) => (
   <View
     key={`coin-${coin.id}-${key}`}
     style={[
@@ -1172,6 +1249,8 @@ const renderWebCoin = (coin: Collectible, screenX: number, screenY: number, key:
         width: coin.radius * 2,
         height: coin.radius * 2,
         borderRadius: coin.radius,
+        backgroundColor: coinColor,
+        borderColor: coinOutline,
       },
     ]}
   >
@@ -1182,6 +1261,7 @@ const renderWebCoin = (coin: Collectible, screenX: number, screenY: number, key:
           width: coin.radius,
           height: coin.radius,
           borderRadius: coin.radius / 2,
+          backgroundColor: coinHighlight,
         },
       ]}
     />
@@ -1640,14 +1720,11 @@ const webStyles = StyleSheet.create({
   },
   coin: {
     position: 'absolute',
-    backgroundColor: COIN_COLOR,
-    borderWidth: 2,
-    borderColor: COIN_OUTLINE,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
   },
   coinHighlight: {
-    backgroundColor: COIN_HIGHLIGHT,
     opacity: 0.75,
   },
   buildingShadow: {

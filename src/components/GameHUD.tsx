@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { GameStats, WeaponId } from '../types/Game';
+import { GameStats, WeaponId, TimeOfDay } from '../types/Game';
+import { formatTime } from '../utils/TimeOfDay';
 
 const MAX_WANTED_STARS = 6;
 
@@ -20,6 +21,7 @@ interface GameHUDProps {
   onWeaponSelect: (weapon: WeaponId) => void;
   isInVehicle?: boolean;
   onExitVehicle?: () => void;
+  timeOfDay?: TimeOfDay;
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
@@ -29,6 +31,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onWeaponSelect,
   isInVehicle = false,
   onExitVehicle,
+  timeOfDay,
 }) => {
   return (
     <View style={styles.container} pointerEvents="box-none">
@@ -41,6 +44,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         >
           <Text style={styles.exitVehicleText}>🚪 Vystoupit</Text>
         </TouchableOpacity>
+      )}
+      {/* Time display */}
+      {timeOfDay && (
+        <View style={styles.timeContainer} pointerEvents="none">
+          <Text style={styles.timeText}>{formatTime(timeOfDay)}</Text>
+          <Text style={styles.timeOfDayText}>{timeOfDay.timeOfDay.toUpperCase()}</Text>
+        </View>
       )}
       <View style={styles.topRightContainer} pointerEvents="none">
         <View style={styles.healthContainer}>
@@ -223,5 +233,32 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+  },
+  timeContainer: {
+    position: 'absolute',
+    top: 20,
+    left: 80, // Position to the right of pause button (50px width + 30px gap)
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+  },
+  timeText: {
+    color: '#ffd966',
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: 'monospace',
+    letterSpacing: 2,
+  },
+  timeOfDayText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2,
+    letterSpacing: 1,
+    opacity: 0.8,
   },
 });

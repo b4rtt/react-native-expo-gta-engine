@@ -11,6 +11,7 @@ import { TILE_SIZE } from '../utils/Isometric';
 import { serializeGameState, applySaveData, SaveData } from '../utils/SaveData';
 import { Storage, SAVE_KEY_CONSTANT } from '../utils/Storage';
 import { length, subtract } from '../utils/Math';
+import { createTimeOfDay, updateTimeOfDay } from '../utils/TimeOfDay';
 
 export class GameLoop {
   private gameState: GameState;
@@ -69,6 +70,7 @@ export class GameLoop {
       lastUpdate: 0,
       isPaused: false,
       fps: 0,
+      timeOfDay: createTimeOfDay(12, 0), // Start at noon
     };
   }
 
@@ -182,6 +184,11 @@ export class GameLoop {
       avgFPS = this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
       this.fpsUpdateInterval = 0;
     }
+
+    // Update time of day (only when not paused)
+    // Time scale: 1.0 = 1 game minute per real second
+    // For testing: 60.0 = 1 game hour per real second (much faster)
+    const updatedTimeOfDay = updateTimeOfDay(this.gameState.timeOfDay, deltaTime, 60.0);
 
     // Handle vehicle entering/exiting
     let updatedVehicles = [...this.gameState.vehicles];
@@ -407,6 +414,7 @@ export class GameLoop {
       stats: updatedStats,
       npcs: updatedNPCs,
       vehicles: updatedVehicles,
+      timeOfDay: updatedTimeOfDay,
       lastUpdate: currentTime,
       fps: avgFPS,
     };

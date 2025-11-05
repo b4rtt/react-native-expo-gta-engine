@@ -28,7 +28,7 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [x] Replace the placeholder sprite with a custom player character (idle/walk animations in four directions).
 - [ ] Design GTA-inspired vehicle and pedestrian sprites.
 - [ ] Add ambient city soundscape and SFX hooks for movement, pickups, and UI.
-- [ ] Implement day/night cycle with palette shifts and dynamic lighting accents.
+- [x] Implement day/night cycle with palette shifts and dynamic lighting accents.
 
 ## Tooling & Extensibility
 - [ ] Load city layout from external matrix-based JSON/CSV definition, with fallback to procedural generation.

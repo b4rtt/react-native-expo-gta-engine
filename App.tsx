@@ -340,6 +340,7 @@ export default function App() {
             gameLoopRef.current.exitVehicle();
           }
         }}
+        timeOfDay={gameState.timeOfDay}
       />
       <VirtualJoystick onInputChange={handleJoystickInputChange} />
       

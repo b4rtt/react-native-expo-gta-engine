@@ -100,6 +100,13 @@ export interface GameStats {
   wantedLevel: number; // 0-6
 }
 
+export interface TimeOfDay {
+  hour: number; // 0-23
+  minute: number; // 0-59
+  timeOfDay: 'dawn' | 'day' | 'dusk' | 'night'; // Time period classification
+  lightLevel: number; // 0-1, where 0 is darkest and 1 is brightest
+}
+
 export interface GameState {
   player: Player;
   camera: Camera;
@@ -115,4 +122,5 @@ export interface GameState {
   lastUpdate: number;
   isPaused: boolean;
   fps?: number; // Frames per second for debug overlay
+  timeOfDay: TimeOfDay; // Current time of day
 }
