@@ -7,6 +7,7 @@ import { buildTileLookup, TileLookup, getTileAt } from '../utils/TileLookup';
 import { generateCoins, resolveCoinCollection } from '../utils/Collectibles';
 import { spawnNPCsInCity, updateNPC } from '../entities/NPC';
 import { spawnVehiclesInCity, updateVehicle, updatePoliceVehicle, createVehicle } from '../entities/Vehicle';
+import { checkProjectileVehicleCollision, damageVehicle } from '../entities/VehicleDamage';
 import { 
   createProjectile, 
   updateProjectile, 
@@ -550,8 +551,50 @@ export class GameLoop {
       }
     }
     
+    // Check projectile collisions with vehicles
+    for (const projectile of updatedProjectiles) {
+      // Skip if projectile already hit something
+      if (projectilesToRemove.has(projectile.id)) continue;
+      
+      // Check collision with each vehicle
+      for (let i = 0; i < updatedVehicles.length; i++) {
+        const vehicle = updatedVehicles[i];
+        
+        // Don't hit destroyed vehicles or player's vehicle
+        if (vehicle.destroyed || vehicle.id === updatedPlayer.inVehicle) continue;
+        
+        if (checkProjectileVehicleCollision(projectile, vehicle)) {
+          // Damage vehicle
+          updatedVehicles[i] = damageVehicle(vehicle, projectile.damage);
+          
+          // Mark projectile for removal
+          projectilesToRemove.add(projectile.id);
+          break;
+        }
+      }
+    }
+    
     // Remove projectiles that hit something
     updatedProjectiles = updatedProjectiles.filter(proj => !projectilesToRemove.has(proj.id));
+    
+    // Remove destroyed vehicles or kick player out if their vehicle is destroyed
+    const destroyedVehicleId = updatedVehicles.find(v => v.destroyed && v.id === updatedPlayer.inVehicle)?.id;
+    if (destroyedVehicleId) {
+      // Kick player out of destroyed vehicle
+      const destroyedVehicle = updatedVehicles.find(v => v.id === destroyedVehicleId);
+      if (destroyedVehicle) {
+        updatedPlayer = {
+          ...updatedPlayer,
+          inVehicle: undefined,
+          position: { ...destroyedVehicle.position },
+          velocity: { x: 0, y: 0 },
+          speed: 0,
+        };
+      }
+    }
+    
+    // Remove destroyed vehicles after a short delay (they stay as wreckage briefly)
+    updatedVehicles = updatedVehicles.filter(v => !v.destroyed || v.id === destroyedVehicleId);
     
     // Update NPCs with normal AI (only if they still exist)
     const finalNPCs: typeof updatedNPCs = [];

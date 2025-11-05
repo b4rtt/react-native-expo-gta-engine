@@ -117,6 +117,9 @@ export interface Vehicle extends Entity {
   isPolice: boolean; // true if this is a police vehicle
   chasing: boolean; // true if actively chasing the player
   targetPosition?: Vector2; // Target position for AI chasing
+  health: number; // Current health (0-100)
+  maxHealth: number; // Maximum health
+  destroyed: boolean; // true if vehicle is destroyed (exploded)
 }
 
 export interface Camera {

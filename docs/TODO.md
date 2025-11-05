@@ -43,7 +43,8 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [ ] Add health regeneration/pickup system.
 
 ## Advanced Gameplay
-- [ ] Implement vehicle damage system (visual damage, health, explosions).
+- [x] Implement vehicle damage system (health, collision damage, projectile damage).
+- [ ] Add visual damage effects (smoke, fire, explosions).
 - [ ] Add mission system with objectives and rewards.
 - [ ] Create different pedestrian types (civilians, police, gang members).
 - [ ] Implement basic AI for police pursuit (pathfinding, ramming).

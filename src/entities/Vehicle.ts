@@ -51,6 +51,9 @@ export const createVehicle = (
     isPolice,
     chasing: false,
     targetPosition: undefined,
+    health: 100,
+    maxHealth: 100,
+    destroyed: false,
   };
 };
 
@@ -196,12 +199,26 @@ export const updateVehicle = (
   
   const newSpeed = length(resolvedVelocity);
   
+  // Calculate collision damage (based on speed change)
+  const speedChange = Math.abs(newSpeed - vehicle.speed);
+  let healthDamage = 0;
+  
+  // If we hit a wall and lost significant speed, take damage
+  if (speedChange > 50) {
+    healthDamage = speedChange / 10; // Scale damage based on speed loss
+  }
+  
+  const newHealth = Math.max(0, vehicle.health - healthDamage);
+  const isDestroyed = newHealth <= 0;
+  
   return {
     ...vehicle,
     position: positionAfterMovement,
     rotation: newRotation,
     velocity: resolvedVelocity,
     speed: newSpeed,
+    health: newHealth,
+    destroyed: isDestroyed,
   };
 };
 
