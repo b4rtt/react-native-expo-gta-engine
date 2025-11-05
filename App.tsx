@@ -13,7 +13,7 @@ import { OptionsScreen } from './src/components/OptionsScreen';
 import { CreditsScreen } from './src/components/CreditsScreen';
 import { MapEditor } from './src/components/MapEditor';
 import { DebugOverlay } from './src/components/DebugOverlay';
-import { GameState, Vector2, WeaponId } from './src/types/Game';
+import { GameState, Vector2, VehicleInput, WeaponId } from './src/types/Game';
 import { loadCityById, CityId } from './src/utils/CityFiles';
 
 const KEYBOARD_DIRECTIONS: Record<string, Vector2> = {
@@ -37,8 +37,7 @@ export default function App() {
     height: Dimensions.get('window').height,
   });
   const gameLoopRef = useRef<GameLoop | null>(null);
-  const joystickInputRef = useRef<Vector2>({ x: 0, y: 0 });
-  const keyboardInputRef = useRef<Vector2>({ x: 0, y: 0 });
+  const currentInputRef = useRef<Vector2>({ x: 0, y: 0 });
 
   useEffect(() => {
     // Lock screen orientation to landscape
@@ -163,30 +162,59 @@ export default function App() {
     }
   }, [screenSize.width, screenSize.height, handleLoad]);
 
-  const updateCombinedInput = useCallback(() => {
+  // Unified input update - converts current input to player or vehicle input
+  const updateInput = useCallback((input: Vector2) => {
     if (!gameLoopRef.current) {
       return;
     }
-    const combined = {
-      x: joystickInputRef.current.x + keyboardInputRef.current.x,
-      y: joystickInputRef.current.y + keyboardInputRef.current.y,
-    };
-
-    const length = Math.hypot(combined.x, combined.y);
-    const clamped =
-      length > 1
-        ? { x: combined.x / length, y: combined.y / length }
-        : combined;
-
-    gameLoopRef.current.setInput(clamped);
+    
+    currentInputRef.current = input;
+    
+    // Get current game state directly from game loop to avoid dependency
+    const currentGameState = gameLoopRef.current.getState();
+    const isInVehicle = !!currentGameState?.player.inVehicle;
+    
+    if (isInVehicle) {
+      // Convert to vehicle input: forward/backward and steering
+      const inputLength = Math.hypot(input.x, input.y);
+      
+      if (inputLength < 0.05) {
+        // No input
+        gameLoopRef.current.setVehicleInput({ acceleration: 0, steering: 0 });
+        gameLoopRef.current.setInput({ x: 0, y: 0 });
+      } else {
+        // Y axis = acceleration (negative Y = forward in screen space)
+        const acceleration = Math.max(-1, Math.min(1, -input.y));
+        // X axis = steering
+        const steering = Math.max(-1, Math.min(1, input.x));
+        
+        gameLoopRef.current.setVehicleInput({ acceleration, steering });
+        gameLoopRef.current.setInput({ x: 0, y: 0 });
+      }
+    } else {
+      // Player movement - direct input
+      const inputLength = Math.hypot(input.x, input.y);
+      
+      if (inputLength < 0.05) {
+        gameLoopRef.current.setInput({ x: 0, y: 0 });
+        gameLoopRef.current.setVehicleInput({ acceleration: 0, steering: 0 });
+      } else {
+        // Normalize if needed
+        const normalizedInput = inputLength > 1 
+          ? { x: input.x / inputLength, y: input.y / inputLength }
+          : input;
+        
+        gameLoopRef.current.setInput(normalizedInput);
+        gameLoopRef.current.setVehicleInput({ acceleration: 0, steering: 0 });
+      }
+    }
   }, []);
 
   const handleJoystickInputChange = useCallback(
     (input: Vector2) => {
-      joystickInputRef.current = input;
-      updateCombinedInput();
+      updateInput(input);
     },
-    [updateCombinedInput]
+    [updateInput]
   );
 
   const handleWeaponSelect = (weapon: WeaponId) => {
@@ -208,66 +236,97 @@ export default function App() {
 
     const pressed = new Set<string>();
 
-    const recomputeKeyboardInput = () => {
-      let x = 0;
-      let y = 0;
-
-      pressed.forEach((code) => {
-        const dir = KEYBOARD_DIRECTIONS[code];
-        if (!dir) return;
-        x += dir.x;
-        y += dir.y;
-      });
-
-      if (x === 0 && y === 0) {
-        keyboardInputRef.current = { x: 0, y: 0 };
-      } else {
-        const length = Math.hypot(x, y);
-        keyboardInputRef.current = {
-          x: x / (length || 1),
-          y: y / (length || 1),
-        };
+    const computeKeyboardInput = () => {
+      if (!gameLoopRef.current) {
+        return;
       }
+      
+      const currentGameState = gameLoopRef.current.getState();
+      const isInVehicle = !!currentGameState?.player.inVehicle;
+      
+      if (isInVehicle) {
+        // Vehicle controls
+        let y = 0; // acceleration
+        let x = 0; // steering
+        
+        // Forward acceleration (ArrowUp or W)
+        if (pressed.has('ArrowUp') || pressed.has('KeyW')) {
+          y = -1; // Negative Y = forward
+        }
+        
+        // Brake/reverse (ArrowDown, S, or Space)
+        if (pressed.has('ArrowDown') || pressed.has('KeyS') || pressed.has('Space')) {
+          y = 1; // Positive Y = backward
+        }
+        
+        // Steer left (ArrowLeft or A)
+        if (pressed.has('ArrowLeft') || pressed.has('KeyA')) {
+          x = -1;
+        }
+        
+        // Steer right (ArrowRight or D)
+        if (pressed.has('ArrowRight') || pressed.has('KeyD')) {
+          x = 1;
+        }
+        
+        updateInput({ x, y });
+      } else {
+        // Player movement - use WASD or arrows
+        let x = 0;
+        let y = 0;
 
-      updateCombinedInput();
+        if (pressed.has('ArrowUp') || pressed.has('KeyW')) y -= 1;
+        if (pressed.has('ArrowDown') || pressed.has('KeyS')) y += 1;
+        if (pressed.has('ArrowLeft') || pressed.has('KeyA')) x -= 1;
+        if (pressed.has('ArrowRight') || pressed.has('KeyD')) x += 1;
+
+        updateInput({ x, y });
+      }
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const { code } = event;
       
-      // Handle ESC key for pause (only in game)
+      // Handle ESC key for pause
       if (code === 'Escape') {
         event.preventDefault();
         handlePause();
         return;
       }
 
-      // Handle F3 or Backquote (`) for debug overlay toggle
+      // Handle F3 or Backquote for debug overlay
       if (code === 'F3' || code === 'Backquote') {
         event.preventDefault();
         setShowDebugOverlay((prev) => !prev);
         return;
       }
 
-      if (!KEYBOARD_DIRECTIONS[code]) {
-        return;
-      }
-
-      event.preventDefault();
-      if (!pressed.has(code)) {
-        pressed.add(code);
-        recomputeKeyboardInput();
+      // Handle movement keys
+      const isMovementKey = code === 'ArrowUp' || code === 'ArrowDown' || 
+                           code === 'ArrowLeft' || code === 'ArrowRight' ||
+                           code === 'KeyW' || code === 'KeyA' || code === 'KeyS' || code === 'KeyD';
+      
+      // Handle spacebar only for vehicle brake
+      const currentGameState = gameLoopRef.current?.getState();
+      const isVehicleKey = code === 'Space' && currentGameState?.player.inVehicle;
+      
+      if (isMovementKey || isVehicleKey) {
+        event.preventDefault();
+        if (!pressed.has(code)) {
+          pressed.add(code);
+          computeKeyboardInput();
+        }
       }
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
       const { code } = event;
-      if (!pressed.has(code)) {
-        return;
+      
+      if (pressed.has(code)) {
+        event.preventDefault();
+        pressed.delete(code);
+        computeKeyboardInput();
       }
-      event.preventDefault();
-      pressed.delete(code);
-      recomputeKeyboardInput();
     };
 
     const handleBlur = () => {
@@ -275,8 +334,7 @@ export default function App() {
         return;
       }
       pressed.clear();
-      keyboardInputRef.current = { x: 0, y: 0 };
-      updateCombinedInput();
+      updateInput({ x: 0, y: 0 });
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -288,7 +346,7 @@ export default function App() {
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [updateCombinedInput, handlePause, currentScreen]);
+  }, [updateInput, handlePause, currentScreen]);
 
   // Render menu screens
   if (currentScreen === 'main' || currentScreen === 'select-city') {
@@ -364,6 +422,16 @@ export default function App() {
         selectedWeapon={gameState.selectedWeapon}
         onWeaponSelect={handleWeaponSelect}
         isInVehicle={!!gameState.player.inVehicle}
+        vehicleSpeed={
+          gameState.player.inVehicle
+            ? gameState.vehicles.find((v) => v.id === gameState.player.inVehicle)?.speed || 0
+            : 0
+        }
+        vehicleMaxSpeed={
+          gameState.player.inVehicle
+            ? gameState.vehicles.find((v) => v.id === gameState.player.inVehicle)?.maxSpeed || 280
+            : 280
+        }
         onExitVehicle={() => {
           if (gameLoopRef.current) {
             gameLoopRef.current.exitVehicle();

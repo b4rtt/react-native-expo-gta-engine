@@ -1,4 +1,4 @@
-import { GameState, Vector2, WeaponId, Vehicle, Player } from '../types/Game';
+import { GameState, Vector2, VehicleInput, WeaponId, Vehicle, Player } from '../types/Game';
 import { createPlayer, updatePlayer } from '../entities/Player';
 import { createCamera, updateCamera } from './Camera';
 import { generateCityMap } from '../utils/CityMap';
@@ -17,6 +17,7 @@ import { createTimeOfDay, updateTimeOfDay } from '../utils/TimeOfDay';
 export class GameLoop {
   private gameState: GameState;
   private input: Vector2 = { x: 0, y: 0 };
+  private vehicleInput: VehicleInput = { acceleration: 0, steering: 0 };
   private screenWidth: number = 0;
   private screenHeight: number = 0;
   private animationFrameId: number | null = null;
@@ -85,6 +86,10 @@ export class GameLoop {
 
   setInput(input: Vector2) {
     this.input = { x: input.x, y: input.y };
+  }
+
+  setVehicleInput(input: VehicleInput) {
+    this.vehicleInput = { acceleration: input.acceleration, steering: input.steering };
   }
 
   setSelectedWeapon(weapon: WeaponId) {
@@ -245,7 +250,7 @@ export class GameLoop {
       if (vehicleIndex >= 0) {
         updatedVehicles[vehicleIndex] = updateVehicle(
           updatedVehicles[vehicleIndex],
-          this.input,
+          this.vehicleInput,
           deltaTime,
           this.tileLookup
         );
@@ -274,11 +279,11 @@ export class GameLoop {
     // Exit when: manual exit requested OR (in vehicle, stopped, and no input for 0.5 seconds)
     if (updatedPlayer.inVehicle && playerVehicle) {
       const vehicleSpeed = length(playerVehicle.velocity);
-      const inputLength = length(this.input);
+      const hasVehicleInput = Math.abs(this.vehicleInput.acceleration) > 0.01 || Math.abs(this.vehicleInput.steering) > 0.01;
       
       // Manual exit (button press) - exit immediately regardless of speed
       // Auto-exit - only when stopped and no input for 0.5 seconds
-      const shouldExit = this.pendingExit || (vehicleSpeed < 5 && inputLength < 0.1 && (currentTime - this.lastExitAttempt > 500));
+      const shouldExit = this.pendingExit || (vehicleSpeed < 5 && !hasVehicleInput && (currentTime - this.lastExitAttempt > 500));
       
       if (shouldExit) {
         console.log('[GameLoop] Exiting vehicle - pendingExit:', this.pendingExit, 'vehicleSpeed:', vehicleSpeed);

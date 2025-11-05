@@ -29,6 +29,8 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [ ] Design GTA-inspired vehicle and pedestrian sprites.
 - [ ] Add ambient city soundscape and SFX hooks for movement, pickups, and UI.
 - [x] Implement day/night cycle with palette shifts and dynamic lighting accents.
+- [x] Fix vehicle controls: acceleration with forward arrow, brake with backward arrow or spacebar, steering with left/right arrows.
+- [x] Add speedometer HUD when player is in vehicle (replace weapon selector).
 
 ## Tooling & Extensibility
 - [x] Load city layout from external matrix-based JSON/CSV definition, with fallback to procedural generation.

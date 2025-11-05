@@ -20,6 +20,8 @@ interface GameHUDProps {
   selectedWeapon: WeaponId;
   onWeaponSelect: (weapon: WeaponId) => void;
   isInVehicle?: boolean;
+  vehicleSpeed?: number;
+  vehicleMaxSpeed?: number;
   onExitVehicle?: () => void;
   timeOfDay?: TimeOfDay;
 }
@@ -30,6 +32,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   selectedWeapon,
   onWeaponSelect,
   isInVehicle = false,
+  vehicleSpeed = 0,
+  vehicleMaxSpeed = 280,
   onExitVehicle,
   timeOfDay,
 }) => {
@@ -90,21 +94,42 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           );
         })}
       </View>
-      <View style={styles.weaponWidget}>
-        <TouchableOpacity
-          style={styles.weaponDisplay}
-          onPress={() => {
-            const currentIndex = weapons.findIndex((w) => w === selectedWeapon);
-            const nextWeapon = weapons[(currentIndex + 1) % weapons.length];
-            onWeaponSelect(nextWeapon);
-          }}
-          activeOpacity={0.8}
-        >
-          <View style={styles.weaponIconFrame}>
-            <Text style={styles.weaponEmoji}>{WEAPON_ICONS[selectedWeapon]}</Text>
+      {isInVehicle ? (
+        <View style={styles.speedometerWidget}>
+          <View style={styles.speedometerDisplay}>
+            <Text style={styles.speedometerLabel}>SPEED</Text>
+            <Text style={styles.speedometerValue}>
+              {Math.round(vehicleSpeed)}
+            </Text>
+            <View style={styles.speedometerBar}>
+              <View
+                style={[
+                  styles.speedometerBarFill,
+                  {
+                    width: `${Math.min(100, (vehicleSpeed / vehicleMaxSpeed) * 100)}%`,
+                  },
+                ]}
+              />
+            </View>
           </View>
-        </TouchableOpacity>
-      </View>
+        </View>
+      ) : (
+        <View style={styles.weaponWidget}>
+          <TouchableOpacity
+            style={styles.weaponDisplay}
+            onPress={() => {
+              const currentIndex = weapons.findIndex((w) => w === selectedWeapon);
+              const nextWeapon = weapons[(currentIndex + 1) % weapons.length];
+              onWeaponSelect(nextWeapon);
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.weaponIconFrame}>
+              <Text style={styles.weaponEmoji}>{WEAPON_ICONS[selectedWeapon]}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -214,6 +239,47 @@ const styles = StyleSheet.create({
   },
   weaponEmoji: {
     fontSize: 34,
+  },
+  speedometerWidget: {
+    position: 'absolute',
+    left: 20,
+    bottom: 32,
+  },
+  speedometerDisplay: {
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  speedometerLabel: {
+    color: '#ffd966',
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 1,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  speedometerValue: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: '700',
+    fontFamily: 'monospace',
+    marginBottom: 8,
+  },
+  speedometerBar: {
+    width: '100%',
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  speedometerBarFill: {
+    height: '100%',
+    backgroundColor: '#4caf50',
+    borderRadius: 3,
   },
   exitVehicleButton: {
     position: 'absolute',

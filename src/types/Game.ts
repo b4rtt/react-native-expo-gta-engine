@@ -9,6 +9,11 @@ export interface Vector3 {
   z: number;
 }
 
+export interface VehicleInput {
+  acceleration: number; // -1 (brake/reverse) to 1 (forward), 0 = no input
+  steering: number; // -1 (left) to 1 (right), 0 = straight
+}
+
 export type TileType = 'grass' | 'pavement' | 'road' | 'building' | 'water' | 'bridge';
 
 export type RoadConnection = {

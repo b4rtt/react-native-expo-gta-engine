@@ -1,4 +1,4 @@
-import { Vehicle, Vector2 } from '../types/Game';
+import { Vehicle, Vector2, VehicleInput } from '../types/Game';
 import { add, multiply, normalize, length, subtract } from '../utils/Math';
 import { getTileAt, TileLookup } from '../utils/TileLookup';
 import { TILE_SIZE } from '../utils/Isometric';
@@ -29,7 +29,7 @@ export const createVehicle = (
   const typeIndex = Math.abs(seed * 7) % VEHICLE_TYPES.length;
   
   const type = VEHICLE_TYPES[typeIndex];
-  const maxSpeed = type === 'truck' ? 250 : type === 'van' ? 220 : 280; // Different speeds per type
+  const maxSpeed = type === 'truck' ? 240 : type === 'van' ? 260 : 300; // Increased max speeds for better gameplay
   
   return {
     id,
@@ -50,7 +50,7 @@ export const createVehicle = (
  */
 export const updateVehicle = (
   vehicle: Vehicle,
-  input: Vector2,
+  input: VehicleInput,
   deltaTime: number,
   tileLookup: TileLookup
 ): Vehicle => {
@@ -59,48 +59,76 @@ export const updateVehicle = (
     return vehicle;
   }
 
-  // Vehicle physics constants
-  const acceleration = 1200; // Faster acceleration than player
-  const deceleration = 800; // Slower deceleration (more momentum)
-  const turnRate = 4.5; // Radians per second (how fast vehicle rotates)
-  const driftFactor = 0.85; // How much the vehicle drifts (lower = more drift)
+  // Vehicle physics constants - improved for better feel
+  const acceleration = 1800; // Forward acceleration (increased for snappier response)
+  const brakeDeceleration = 2000; // Braking deceleration (strong brakes)
+  const reverseAcceleration = 1000; // Reverse acceleration (decent reverse speed)
+  const deceleration = 1000; // Natural deceleration when no input (faster slowdown)
+  const turnRate = 5.5; // Radians per second (improved turning)
+  const driftFactor = 0.82; // How much the vehicle drifts (slightly more responsive)
   
   let newVelocity = { ...vehicle.velocity };
   let newRotation = vehicle.rotation;
   
-  const inputLength = length(input);
-  
-  if (inputLength > 0) {
-    // Get desired direction from input
-    const desiredDirection = normalize(input);
-    const desiredAngle = Math.atan2(desiredDirection.y, desiredDirection.x);
+  // Handle steering (left/right)
+  if (Math.abs(input.steering) > 0.01) {
+    // Steering speed depends on current speed (faster = less steering)
+    const currentSpeed = length(newVelocity);
+    const maxSpeedFactor = Math.min(1, currentSpeed / vehicle.maxSpeed);
+    // Improved steering curve: better control at low speeds, still responsive at high speeds
+    const steeringMultiplier = 0.6 + (1 - maxSpeedFactor) * 0.4; // More steering at low speeds
     
-    // Smoothly rotate towards desired direction
-    let angleDiff = desiredAngle - newRotation;
-    // Normalize angle difference to [-PI, PI]
-    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-    
-    // Apply turn rate
-    const maxTurn = turnRate * deltaTime;
-    const actualTurn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
-    newRotation += actualTurn;
+    const turnAmount = input.steering * turnRate * deltaTime * steeringMultiplier;
+    newRotation += turnAmount;
     
     // Normalize rotation
     while (newRotation > Math.PI * 2) newRotation -= Math.PI * 2;
     while (newRotation < 0) newRotation += Math.PI * 2;
-    
-    // Apply acceleration in forward direction (not input direction - this creates drift)
+  }
+  
+  // Handle acceleration/brake (forward/backward)
+  if (Math.abs(input.acceleration) > 0.01) {
     const forwardDir = { x: Math.cos(newRotation), y: Math.sin(newRotation) };
-    const accelerationVec = multiply(forwardDir, acceleration * deltaTime);
     
-    // Blend current velocity with acceleration (creates arcade feel)
-    newVelocity = add(
-      multiply(newVelocity, driftFactor),
-      multiply(accelerationVec, 1 - driftFactor)
-    );
+    if (input.acceleration > 0) {
+      // Forward acceleration - progressive power based on input
+      const currentSpeed = length(newVelocity);
+      const speedRatio = currentSpeed / vehicle.maxSpeed;
+      
+      // Acceleration is stronger at lower speeds (like real cars)
+      const accelerationMultiplier = 1.0 + (1 - speedRatio) * 0.5; // Up to 1.5x at low speeds
+      const accelerationVec = multiply(
+        forwardDir, 
+        acceleration * deltaTime * input.acceleration * accelerationMultiplier
+      );
+      
+      // Blend current velocity with acceleration (creates arcade feel with drift)
+      newVelocity = add(
+        multiply(newVelocity, driftFactor),
+        multiply(accelerationVec, 1 - driftFactor)
+      );
+    } else {
+      // Brake or reverse
+      const currentSpeed = length(newVelocity);
+      
+      if (currentSpeed > 5) {
+        // Braking (when moving forward) - strong and immediate
+        const brakeAmount = brakeDeceleration * deltaTime * Math.abs(input.acceleration);
+        const newSpeed = Math.max(0, currentSpeed - brakeAmount);
+        
+        if (newSpeed === 0) {
+          newVelocity = { x: 0, y: 0 };
+        } else {
+          newVelocity = multiply(normalize(newVelocity), newSpeed);
+        }
+      } else {
+        // Reverse (when stopped or moving slowly)
+        const reverseVec = multiply(forwardDir, -reverseAcceleration * deltaTime * Math.abs(input.acceleration));
+        newVelocity = add(newVelocity, reverseVec);
+      }
+    }
   } else {
-    // No input - apply deceleration
+    // No acceleration input - apply natural deceleration
     const currentSpeed = length(newVelocity);
     if (currentSpeed > 0) {
       const decelerationAmount = deceleration * deltaTime;
