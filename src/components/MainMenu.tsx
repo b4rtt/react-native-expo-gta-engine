@@ -91,18 +91,22 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </Text>
             </TouchableOpacity>
             
-            {allCities.map((city) => (
-              <TouchableOpacity
-                key={city.id}
-                style={[styles.cityButton, selectedCity === city.id && styles.cityButtonSelected]}
-                onPress={() => setSelectedCity(city.id)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.cityButtonText, selectedCity === city.id && styles.cityButtonTextSelected]}>
-                  {city.name} {city.isCustom && '★'}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {allCities.length === 0 ? (
+              <Text style={styles.emptyText}>Loading cities...</Text>
+            ) : (
+              allCities.map((city) => (
+                <TouchableOpacity
+                  key={city.id}
+                  style={[styles.cityButton, selectedCity === city.id && styles.cityButtonSelected]}
+                  onPress={() => setSelectedCity(city.id)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.cityButtonText, selectedCity === city.id && styles.cityButtonTextSelected]}>
+                    {city.name} {city.isCustom && '★'}
+                  </Text>
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
 
           <View style={styles.cityActions}>
@@ -304,6 +308,12 @@ const styles = StyleSheet.create({
   cityButtonTextSelected: {
     color: '#FFD700',
     fontWeight: 'bold',
+  },
+  emptyText: {
+    color: '#888',
+    fontSize: 16,
+    textAlign: 'center',
+    padding: 20,
   },
   cityActions: {
     flexDirection: 'row',
