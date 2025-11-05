@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
   },
   exitVehicleButton: {
     position: 'absolute',
-    top: 140,
+    bottom: 180, // Above speedometer
     left: 20,
     backgroundColor: 'rgba(200, 50, 50, 0.85)',
     paddingHorizontal: 20,
