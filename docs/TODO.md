@@ -25,7 +25,7 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [x] Introduce water tiles (rivers/canals) and bridges connecting blocks.
 
 ## Art & Audio
-- [ ] Replace the placeholder sprite with a custom player character (idle/walk animations in four directions).
+- [x] Replace the placeholder sprite with a custom player character (idle/walk animations in four directions).
 - [ ] Design GTA-inspired vehicle and pedestrian sprites.
 - [ ] Add ambient city soundscape and SFX hooks for movement, pickups, and UI.
 - [ ] Implement day/night cycle with palette shifts and dynamic lighting accents.

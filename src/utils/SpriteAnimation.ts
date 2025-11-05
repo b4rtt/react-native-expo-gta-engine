@@ -1,16 +1,16 @@
 import { SpriteAnimation, Direction, AnimationType, Vector2 } from '../types/Game';
 
-// Sprritesheet configuration: 3x3 grid
+// Spritesheet configuration: 6x3 grid (192x96 pixels)
 export const SPRITE_SIZE = 32; // Size of each sprite frame
-export const SPRITESHEET_COLS = 3;
+export const SPRITESHEET_COLS = 6;
 export const SPRITESHEET_ROWS = 3;
 
 // Animation frame counts
 export const ANIMATION_FRAMES: Record<Direction, Record<AnimationType, number>> = {
-  front: { idle: 2, walk: 0 },
-  back: { idle: 1, walk: 2 },
-  right: { idle: 1, walk: 4 },
-  left: { idle: 1, walk: 4 }, // Use right walk frames mirrored
+  front: { idle: 2, walk: 2 }, // Idle: row 2 cols 4-5, Walk: row 2 cols 2-3 (dolů)
+  back: { idle: 2, walk: 3 }, // Idle: row 2 cols 4-5, Walk: row 1 col 0 + row 2 cols 0-1 (nahoru)
+  right: { idle: 2, walk: 2 }, // Idle: row 2 cols 4-5, Walk: row 0 cols 0,3 (doprava)
+  left: { idle: 2, walk: 2 }, // Idle: row 2 cols 4-5, Walk: row 0 cols 0,3 (doprava, zrcadleno)
 };
 
 // Animation speeds (frames per second)
@@ -92,44 +92,44 @@ export const getSpriteCoords = (
   type: AnimationType,
   frame: number
 ): { col: number; row: number } => {
-  // Spritesheet layout (3x3 grid):
-  // Row 0: front idle (col 0), right walk frame 1 (col 1), right walk frame 2 (col 2)
-  // Row 1: front idle variation (col 0), right walk frame 3 (col 1), right walk frame 4 (col 2)
-  // Row 2: back idle (col 0), back walk frame 1 (col 1), back walk frame 2 (col 2)
+  // Spritesheet layout (6x3 grid, 192x96 pixels):
+  // Row 0: Doprava (col 0), Doleva (col 1), Doleva (col 2), Doprava (col 3), Doleva (col 4), Doleva (col 5)
+  // Row 1: Nahoru (col 0), Doprava (col 1), Doprava (col 2), Doprava (col 3), Doleva (col 4)
+  // Row 2: Nahoru (col 0), Nahoru (col 1), Dolů (col 2), Dolů (col 3), Idle (col 4), Idle (col 5)
 
-  if (direction === 'front' && type === 'idle') {
-    return { col: 0, row: frame % 2 }; // Alternate between row 0 and row 1
+  // Idle: všichni používají row 2 cols 4-5 (2 idle frames)
+  if (type === 'idle') {
+    return { col: (frame % 2) + 4, row: 2 };
   }
 
+  // Right walk: row 0 cols 0, 3 (doprava)
   if (direction === 'right' && type === 'walk') {
-    if (frame === 0) return { col: 1, row: 0 };
-    if (frame === 1) return { col: 2, row: 0 };
-    if (frame === 2) return { col: 1, row: 1 };
-    if (frame === 3) return { col: 2, row: 1 };
+    const rightFrames = [0, 3];
+    return { col: rightFrames[frame % 2], row: 0 };
   }
 
-  if (direction === 'back' && type === 'idle') {
-    return { col: 0, row: 2 };
-  }
-
-  if (direction === 'back' && type === 'walk') {
-    if (frame === 0) return { col: 1, row: 2 };
-    if (frame === 1) return { col: 2, row: 2 };
-  }
-
-  // For left direction, use right walk frames mirrored
+  // Left walk: row 0 cols 0, 3 (doprava) - protože když běží doleva, sprite ukazuje doprava
   if (direction === 'left' && type === 'walk') {
-    if (frame === 0) return { col: 1, row: 0 };
-    if (frame === 1) return { col: 2, row: 0 };
-    if (frame === 2) return { col: 1, row: 1 };
-    if (frame === 3) return { col: 2, row: 1 };
+    const leftFrames = [0, 3]; // Použijeme doprava sprites, které se zrcadlí
+    return { col: leftFrames[frame % 2], row: 0 };
   }
 
-  if (direction === 'left' && type === 'idle') {
-    return { col: 0, row: 0 }; // Use front idle for left idle
+  // Front walk: row 2 cols 2-3 (dolů)
+  if (direction === 'front' && type === 'walk') {
+    return { col: (frame % 2) + 2, row: 2 }; // Dolů sprites z třetího řádku (cols 2-3)
   }
 
-  // Default to front idle frame 0
-  return { col: 0, row: 0 };
+  // Back walk: row 1 col 0 + row 2 cols 0-1 (nahoru)
+  if (direction === 'back' && type === 'walk') {
+    const backFrames = [
+      { col: 0, row: 1 }, // Row 1 col 0
+      { col: 0, row: 2 }, // Row 2 col 0
+      { col: 1, row: 2 }, // Row 2 col 1
+    ];
+    return backFrames[frame % 3];
+  }
+
+  // Default to idle frame
+  return { col: 2, row: 2 };
 };
 

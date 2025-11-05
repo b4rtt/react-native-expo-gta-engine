@@ -7,6 +7,8 @@ import { IsometricRoad, RoadNeighbors } from './IsometricRoad';
 import { IsometricBuilding } from './IsometricBuilding';
 import { IsometricWater } from './IsometricWater';
 import { IsometricBridge } from './IsometricBridge';
+import { PlayerSprite } from './PlayerSprite';
+import { PlayerSpriteWeb } from './PlayerSpriteWeb';
 import { computeBuildingStyle } from '../utils/BuildingStyle';
 import { worldToIsometric, TILE_SIZE } from '../utils/Isometric';
 
@@ -396,12 +398,11 @@ const SkiaGameRenderer: React.FC<GameRendererProps> = ({
             }
             case 'player':
               return (
-                <Circle
+                <PlayerSprite
                   key="player"
-                  cx={playerScreenPos.x}
-                  cy={playerScreenPos.y}
-                  r={player.size / 2}
-                  color="#4CAF50"
+                  player={player}
+                  screenX={playerScreenPos.x}
+                  screenY={playerScreenPos.y}
                 />
               );
           }
@@ -460,19 +461,11 @@ const WebGameRenderer: React.FC<GameRendererProps> = ({
           }
           case 'player':
             return (
-              <View
+              <PlayerSpriteWeb
                 key="player"
-                style={{
-                  position: 'absolute',
-                  left: playerScreenPos.x - player.size / 2,
-                  top: playerScreenPos.y - player.size / 2,
-                  width: player.size,
-                  height: player.size,
-                  borderRadius: player.size / 2,
-                  backgroundColor: '#4CAF50',
-                  borderWidth: 2,
-                  borderColor: '#2e7d32',
-                }}
+                player={player}
+                screenX={playerScreenPos.x}
+                screenY={playerScreenPos.y}
               />
             );
         }
