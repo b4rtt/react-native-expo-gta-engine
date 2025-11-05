@@ -7,6 +7,8 @@ import { generateCoins, resolveCoinCollection } from '../utils/Collectibles';
 import { spawnNPCsInCity, updateNPC } from '../entities/NPC';
 import { generateProps } from '../utils/Props';
 import { TILE_SIZE } from '../utils/Isometric';
+import { serializeGameState, applySaveData, SaveData } from '../utils/SaveData';
+import { Storage, SAVE_KEY_CONSTANT } from '../utils/Storage';
 
 export class GameLoop {
   private gameState: GameState;
@@ -228,5 +230,79 @@ export class GameLoop {
 
   getState(): GameState {
     return this.gameState;
+  }
+
+  /**
+   * Save current game state to storage
+   */
+  async save(): Promise<boolean> {
+    try {
+      const saveData = serializeGameState(this.gameState);
+      const json = JSON.stringify(saveData);
+      await Storage.save(SAVE_KEY_CONSTANT, json);
+      return true;
+    } catch (error) {
+      console.error('Failed to save game:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Load game state from storage and apply it
+   */
+  async load(): Promise<boolean> {
+    try {
+      const json = await Storage.load(SAVE_KEY_CONSTANT);
+      if (!json) {
+        return false;
+      }
+
+      const saveData: SaveData = JSON.parse(json);
+      
+      // Validate save data version
+      if (saveData.version !== '1.0.0') {
+        console.warn('Save data version mismatch:', saveData.version);
+        return false;
+      }
+
+      // Apply save data to current game state
+      this.gameState = applySaveData(this.gameState, saveData);
+      
+      // Update camera to match player position
+      this.gameState.camera.position = { ...this.gameState.player.position };
+      
+      // Notify React of the updated state
+      this.onUpdate(this.gameState);
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to load game:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if a save file exists
+   */
+  static async hasSave(): Promise<boolean> {
+    try {
+      const json = await Storage.load(SAVE_KEY_CONSTANT);
+      return json !== null;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Delete save file
+   */
+  static async deleteSave(): Promise<boolean> {
+    try {
+      await Storage.remove(SAVE_KEY_CONSTANT);
+      return true;
+    } catch (error) {
+      console.error('Failed to delete save:', error);
+      return false;
+    }
   }
 }

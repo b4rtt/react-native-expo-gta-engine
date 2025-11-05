@@ -5,9 +5,17 @@ interface PauseMenuProps {
   onResume: () => void;
   onSettings?: () => void;
   onExit?: () => void;
+  onSave?: () => void;
+  onLoad?: () => void;
 }
 
-export const PauseMenu: React.FC<PauseMenuProps> = ({ onResume, onSettings, onExit }) => {
+export const PauseMenu: React.FC<PauseMenuProps> = ({ 
+  onResume, 
+  onSettings, 
+  onExit,
+  onSave,
+  onLoad,
+}) => {
   return (
     <View style={styles.overlay}>
       <View style={styles.menu}>
@@ -20,6 +28,26 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({ onResume, onSettings, onEx
         >
           <Text style={styles.buttonText}>RESUME</Text>
         </TouchableOpacity>
+
+        {onSave && (
+          <TouchableOpacity 
+            style={styles.button} 
+            onPress={onSave}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.buttonText}>SAVE GAME</Text>
+          </TouchableOpacity>
+        )}
+
+        {onLoad && (
+          <TouchableOpacity 
+            style={styles.button} 
+            onPress={onLoad}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.buttonText}>LOAD GAME</Text>
+          </TouchableOpacity>
+        )}
 
         {onSettings && (
           <TouchableOpacity 

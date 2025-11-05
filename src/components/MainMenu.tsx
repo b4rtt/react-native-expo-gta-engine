@@ -5,14 +5,18 @@ export type MenuScreen = 'main' | 'options' | 'credits';
 
 interface MainMenuProps {
   onStartGame: () => void;
+  onLoadGame?: () => void;
   onShowOptions: () => void;
   onShowCredits: () => void;
+  hasSave?: boolean;
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({
   onStartGame,
+  onLoadGame,
   onShowOptions,
   onShowCredits,
+  hasSave = false,
 }) => {
   return (
     <View style={styles.overlay}>
@@ -27,6 +31,16 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         >
           <Text style={styles.buttonText}>START GAME</Text>
         </TouchableOpacity>
+
+        {hasSave && onLoadGame && (
+          <TouchableOpacity 
+            style={styles.button} 
+            onPress={onLoadGame}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.buttonText}>LOAD GAME</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity 
           style={styles.button} 

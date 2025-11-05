@@ -3,6 +3,7 @@ import { View, StyleSheet, Dimensions, Platform, TouchableOpacity, Text } from '
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { GameLoop } from './src/systems/GameLoop';
+import { Alert } from 'react-native';
 import { GameRenderer } from './src/components/GameRenderer';
 import { VirtualJoystick } from './src/components/VirtualJoystick';
 import { GameHUD } from './src/components/GameHUD';
@@ -28,6 +29,7 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<MenuScreen | 'game'>('main');
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [showDebugOverlay, setShowDebugOverlay] = useState(false);
+  const [hasSave, setHasSave] = useState(false);
   const [screenSize, setScreenSize] = useState({
     width: Dimensions.get('window').width,
     height: Dimensions.get('window').height,
@@ -39,6 +41,9 @@ export default function App() {
   useEffect(() => {
     // Lock screen orientation to landscape
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+
+    // Check if save exists
+    GameLoop.hasSave().then(setHasSave);
 
     // Handle screen size changes
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -80,8 +85,71 @@ export default function App() {
     if (gameLoopRef.current) {
       gameLoopRef.current.pause();
     }
+    // Refresh save status when returning to menu
+    GameLoop.hasSave().then(setHasSave);
     setCurrentScreen('main');
   }, []);
+
+  const handleSave = useCallback(async () => {
+    if (!gameLoopRef.current) {
+      return;
+    }
+    const success = await gameLoopRef.current.save();
+    if (success) {
+      setHasSave(true);
+      Alert.alert('Game Saved', 'Your progress has been saved successfully.');
+    } else {
+      Alert.alert('Save Failed', 'Failed to save game. Please try again.');
+    }
+  }, []);
+
+  const handleLoad = useCallback(async () => {
+    if (!gameLoopRef.current) {
+      // Need to create game loop first
+      const gameLoop = new GameLoop((state) => {
+        setGameState(state);
+      });
+      gameLoop.setScreenSize(screenSize.width, screenSize.height);
+      const success = await gameLoop.load();
+      if (success) {
+        gameLoop.start();
+        gameLoopRef.current = gameLoop;
+        setCurrentScreen('game');
+      } else {
+        Alert.alert('Load Failed', 'No save file found or failed to load game.');
+      }
+      return;
+    }
+
+    const success = await gameLoopRef.current.load();
+    if (success) {
+      Alert.alert('Game Loaded', 'Your progress has been loaded successfully.');
+    } else {
+      Alert.alert('Load Failed', 'Failed to load game. Save file may be corrupted.');
+    }
+  }, [screenSize.width, screenSize.height]);
+
+  const loadGameFromMenu = useCallback(async () => {
+    // Initialize game loop if needed
+    if (!gameLoopRef.current) {
+      const gameLoop = new GameLoop((state) => {
+        setGameState(state);
+      });
+      gameLoop.setScreenSize(screenSize.width, screenSize.height);
+      const success = await gameLoop.load();
+      if (success) {
+        gameLoop.start();
+        gameLoopRef.current = gameLoop;
+        setCurrentScreen('game');
+      } else {
+        Alert.alert('Load Failed', 'No save file found or failed to load game.');
+      }
+    } else {
+      // Game loop exists, just load
+      await handleLoad();
+      setCurrentScreen('game');
+    }
+  }, [screenSize.width, screenSize.height, handleLoad]);
 
   const updateCombinedInput = useCallback(() => {
     if (!gameLoopRef.current) {
@@ -217,8 +285,10 @@ export default function App() {
         <StatusBar hidden />
         <MainMenu
           onStartGame={startGame}
+          onLoadGame={loadGameFromMenu}
           onShowOptions={() => setCurrentScreen('options')}
           onShowCredits={() => setCurrentScreen('credits')}
+          hasSave={hasSave}
         />
       </View>
     );
@@ -281,6 +351,8 @@ export default function App() {
         <PauseMenu 
           onResume={handlePause}
           onExit={exitToMainMenu}
+          onSave={handleSave}
+          onLoad={handleLoad}
         />
       )}
 
@@ -306,7 +378,7 @@ const styles = StyleSheet.create({
   pauseButton: {
     position: 'absolute',
     top: 20,
-    right: 20,
+    left: 20,
     width: 50,
     height: 50,
     borderRadius: 25,

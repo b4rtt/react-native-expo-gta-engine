@@ -39,5 +39,5 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 ## Polish & Performance
 - [ ] Profile rendering on low-end devices; add tile batching and memoisation where necessary.
 - [x] Expose debug overlays (FPS counter, collision boxes, tile coordinates).
-- [ ] Add save/load of player progress and world state.
+- [x] Add save/load of player progress and world state.
 - [ ] Prepare CI script that runs TypeScript checks and linting on push.
