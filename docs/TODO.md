@@ -14,7 +14,7 @@ Actionable tasks that bring the prototype closer to the GTA 2 experience. Items 
 - [x] Add an on-screen GTA-style HUD (health, cash, minimap placeholder, wanted stars stub).
 - [x] Add a weapon quick-select HUD with tap cycling and iconography placeholder.
 - [x] Build a pause menu with resume/settings/exit and wire it into the game loop.
-- [ ] Create a main menu scene with start game / options / credits flow.
+- [x] Create a main menu scene with start game / options / credits flow.
 
 ## World Building
 - [x] Expand road generator to include corners, T-junctions, roundabouts, and alleyways (new tile metadata + renderer support).

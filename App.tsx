@@ -7,6 +7,9 @@ import { GameRenderer } from './src/components/GameRenderer';
 import { VirtualJoystick } from './src/components/VirtualJoystick';
 import { GameHUD } from './src/components/GameHUD';
 import { PauseMenu } from './src/components/PauseMenu';
+import { MainMenu, MenuScreen } from './src/components/MainMenu';
+import { OptionsScreen } from './src/components/OptionsScreen';
+import { CreditsScreen } from './src/components/CreditsScreen';
 import { GameState, Vector2, WeaponId } from './src/types/Game';
 
 const KEYBOARD_DIRECTIONS: Record<string, Vector2> = {
@@ -21,6 +24,7 @@ const KEYBOARD_DIRECTIONS: Record<string, Vector2> = {
 };
 
 export default function App() {
+  const [currentScreen, setCurrentScreen] = useState<MenuScreen | 'game'>('main');
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [screenSize, setScreenSize] = useState({
     width: Dimensions.get('window').width,
@@ -45,19 +49,36 @@ export default function App() {
       }
     });
 
-    // Initialize game loop
-    const gameLoop = new GameLoop((state) => {
-      setGameState(state);
-    });
-    gameLoop.setScreenSize(screenSize.width, screenSize.height);
-    gameLoop.start();
-    gameLoopRef.current = gameLoop;
-
     return () => {
       subscription.remove();
-      gameLoop.stop();
+      if (gameLoopRef.current) {
+        gameLoopRef.current.stop();
+      }
       ScreenOrientation.unlockAsync();
     };
+  }, []);
+
+  const startGame = useCallback(() => {
+    // Initialize game loop only when starting the game
+    if (!gameLoopRef.current) {
+      const gameLoop = new GameLoop((state) => {
+        setGameState(state);
+      });
+      gameLoop.setScreenSize(screenSize.width, screenSize.height);
+      gameLoop.start();
+      gameLoopRef.current = gameLoop;
+    } else {
+      // If game loop already exists, just unpause and resume
+      gameLoopRef.current.unpause();
+    }
+    setCurrentScreen('game');
+  }, [screenSize.width, screenSize.height]);
+
+  const exitToMainMenu = useCallback(() => {
+    if (gameLoopRef.current) {
+      gameLoopRef.current.pause();
+    }
+    setCurrentScreen('main');
   }, []);
 
   const updateCombinedInput = useCallback(() => {
@@ -99,7 +120,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== 'web' || currentScreen !== 'game') {
       return;
     }
 
@@ -132,7 +153,7 @@ export default function App() {
     const handleKeyDown = (event: KeyboardEvent) => {
       const { code } = event;
       
-      // Handle ESC key for pause
+      // Handle ESC key for pause (only in game)
       if (code === 'Escape') {
         event.preventDefault();
         handlePause();
@@ -178,8 +199,41 @@ export default function App() {
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [updateCombinedInput, handlePause]);
+  }, [updateCombinedInput, handlePause, currentScreen]);
 
+  // Render menu screens
+  if (currentScreen === 'main') {
+    return (
+      <View style={styles.container}>
+        <StatusBar hidden />
+        <MainMenu
+          onStartGame={startGame}
+          onShowOptions={() => setCurrentScreen('options')}
+          onShowCredits={() => setCurrentScreen('credits')}
+        />
+      </View>
+    );
+  }
+
+  if (currentScreen === 'options') {
+    return (
+      <View style={styles.container}>
+        <StatusBar hidden />
+        <OptionsScreen onBack={() => setCurrentScreen('main')} />
+      </View>
+    );
+  }
+
+  if (currentScreen === 'credits') {
+    return (
+      <View style={styles.container}>
+        <StatusBar hidden />
+        <CreditsScreen onBack={() => setCurrentScreen('main')} />
+      </View>
+    );
+  }
+
+  // Render game (currentScreen === 'game')
   if (!gameState) {
     return (
       <View style={styles.container}>
@@ -215,7 +269,10 @@ export default function App() {
 
       {/* Pause menu overlay */}
       {gameState.isPaused && (
-        <PauseMenu onResume={handlePause} />
+        <PauseMenu 
+          onResume={handlePause}
+          onExit={exitToMainMenu}
+        />
       )}
     </View>
   );
