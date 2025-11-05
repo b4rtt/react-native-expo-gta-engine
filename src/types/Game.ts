@@ -104,4 +104,5 @@ export interface GameState {
   selectedWeapon: WeaponId;
   lastUpdate: number;
   isPaused: boolean;
+  fps?: number; // Frames per second for debug overlay
 }

@@ -17,6 +17,8 @@ export class GameLoop {
   private lastTime: number = 0;
   private onUpdate: (state: GameState) => void;
   private tileLookup: TileLookup;
+  private fpsHistory: number[] = [];
+  private fpsUpdateInterval: number = 0;
 
   constructor(onUpdate: (state: GameState) => void) {
     this.onUpdate = onUpdate;
@@ -55,6 +57,7 @@ export class GameLoop {
       npcs,
       lastUpdate: 0,
       isPaused: false,
+      fps: 0,
     };
   }
 
@@ -135,15 +138,29 @@ export class GameLoop {
   private update = () => {
     const currentTime = performance.now();
     
+    const deltaTime = (currentTime - this.lastTime) / 1000; // Convert to seconds
+    this.lastTime = currentTime;
+
     // If paused, don't update game logic, just schedule next frame
     if (this.gameState.isPaused) {
-      this.lastTime = currentTime; // Keep time updated to prevent delta time jump
       this.animationFrameId = requestAnimationFrame(this.update);
       return;
     }
 
-    const deltaTime = (currentTime - this.lastTime) / 1000; // Convert to seconds
-    this.lastTime = currentTime;
+    // Calculate FPS (average over last second) - only when not paused
+    const currentFPS = deltaTime > 0 ? 1 / deltaTime : 0;
+    this.fpsHistory.push(currentFPS);
+    // Keep only last 60 frames (roughly 1 second at 60fps)
+    if (this.fpsHistory.length > 60) {
+      this.fpsHistory.shift();
+    }
+    // Update FPS every ~0.5 seconds for smoother display
+    this.fpsUpdateInterval += deltaTime;
+    let avgFPS = this.gameState.fps || 0;
+    if (this.fpsUpdateInterval >= 0.5) {
+      avgFPS = this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
+      this.fpsUpdateInterval = 0;
+    }
 
     // Update player (returns new player object)
     const updatedPlayer = updatePlayer(
@@ -199,6 +216,7 @@ export class GameLoop {
       stats: updatedStats,
       npcs: updatedNPCs,
       lastUpdate: currentTime,
+      fps: avgFPS,
     };
 
     // Call update callback with NEW game state

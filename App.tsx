@@ -10,6 +10,7 @@ import { PauseMenu } from './src/components/PauseMenu';
 import { MainMenu, MenuScreen } from './src/components/MainMenu';
 import { OptionsScreen } from './src/components/OptionsScreen';
 import { CreditsScreen } from './src/components/CreditsScreen';
+import { DebugOverlay } from './src/components/DebugOverlay';
 import { GameState, Vector2, WeaponId } from './src/types/Game';
 
 const KEYBOARD_DIRECTIONS: Record<string, Vector2> = {
@@ -26,6 +27,7 @@ const KEYBOARD_DIRECTIONS: Record<string, Vector2> = {
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<MenuScreen | 'game'>('main');
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [showDebugOverlay, setShowDebugOverlay] = useState(false);
   const [screenSize, setScreenSize] = useState({
     width: Dimensions.get('window').width,
     height: Dimensions.get('window').height,
@@ -160,6 +162,13 @@ export default function App() {
         return;
       }
 
+      // Handle F3 or Backquote (`) for debug overlay toggle
+      if (code === 'F3' || code === 'Backquote') {
+        event.preventDefault();
+        setShowDebugOverlay((prev) => !prev);
+        return;
+      }
+
       if (!KEYBOARD_DIRECTIONS[code]) {
         return;
       }
@@ -272,6 +281,16 @@ export default function App() {
         <PauseMenu 
           onResume={handlePause}
           onExit={exitToMainMenu}
+        />
+      )}
+
+      {/* Debug overlay */}
+      {showDebugOverlay && (
+        <DebugOverlay
+          gameState={gameState}
+          width={screenSize.width}
+          height={screenSize.height}
+          showCollisionBoxes={showDebugOverlay}
         />
       )}
     </View>
