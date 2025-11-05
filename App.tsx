@@ -13,6 +13,7 @@ import { OptionsScreen } from './src/components/OptionsScreen';
 import { CreditsScreen } from './src/components/CreditsScreen';
 import { DebugOverlay } from './src/components/DebugOverlay';
 import { GameState, Vector2, WeaponId } from './src/types/Game';
+import { loadCityById, CityId } from './src/utils/CityFiles';
 
 const KEYBOARD_DIRECTIONS: Record<string, Vector2> = {
   ArrowUp: { x: 0, y: -1 },
@@ -65,18 +66,28 @@ export default function App() {
     };
   }, []);
 
-  const startGame = useCallback(() => {
+  const startGame = useCallback((cityId: CityId | null = null) => {
+    // Load city data if cityId is provided
+    const cityData = cityId ? loadCityById(cityId) : null;
+    
     // Initialize game loop only when starting the game
     if (!gameLoopRef.current) {
       const gameLoop = new GameLoop((state) => {
         setGameState(state);
-      });
+      }, cityData);
       gameLoop.setScreenSize(screenSize.width, screenSize.height);
       gameLoop.start();
       gameLoopRef.current = gameLoop;
     } else {
-      // If game loop already exists, just unpause and resume
-      gameLoopRef.current.unpause();
+      // If game loop already exists, we need to create a new one with the selected city
+      // Stop the old one first
+      gameLoopRef.current.stop();
+      const gameLoop = new GameLoop((state) => {
+        setGameState(state);
+      }, cityData);
+      gameLoop.setScreenSize(screenSize.width, screenSize.height);
+      gameLoop.start();
+      gameLoopRef.current = gameLoop;
     }
     setCurrentScreen('game');
   }, [screenSize.width, screenSize.height]);
@@ -279,7 +290,7 @@ export default function App() {
   }, [updateCombinedInput, handlePause, currentScreen]);
 
   // Render menu screens
-  if (currentScreen === 'main') {
+  if (currentScreen === 'main' || currentScreen === 'select-city') {
     return (
       <View style={styles.container}>
         <StatusBar hidden />
@@ -289,6 +300,8 @@ export default function App() {
           onShowOptions={() => setCurrentScreen('options')}
           onShowCredits={() => setCurrentScreen('credits')}
           hasSave={hasSave}
+          currentScreen={currentScreen}
+          onScreenChange={setCurrentScreen}
         />
       </View>
     );

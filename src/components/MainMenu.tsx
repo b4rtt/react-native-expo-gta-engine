@@ -1,14 +1,17 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView } from 'react-native';
+import { AVAILABLE_CITIES, CityId } from '../utils/CityFiles';
 
-export type MenuScreen = 'main' | 'options' | 'credits';
+export type MenuScreen = 'main' | 'options' | 'credits' | 'select-city';
 
 interface MainMenuProps {
-  onStartGame: () => void;
+  onStartGame: (cityId: CityId | null) => void;
   onLoadGame?: () => void;
   onShowOptions: () => void;
   onShowCredits: () => void;
   hasSave?: boolean;
+  currentScreen?: MenuScreen;
+  onScreenChange?: (screen: MenuScreen) => void;
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({
@@ -17,7 +20,75 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onShowOptions,
   onShowCredits,
   hasSave = false,
+  currentScreen = 'main',
+  onScreenChange,
 }) => {
+  const [selectedCity, setSelectedCity] = useState<CityId | null>(null);
+
+  const handleScreenChange = (screen: MenuScreen) => {
+    if (onScreenChange) {
+      onScreenChange(screen);
+    }
+  };
+
+  const handleStartGame = () => {
+    onStartGame(selectedCity);
+  };
+
+  if (currentScreen === 'select-city') {
+    return (
+      <View style={styles.overlay}>
+        <View style={styles.menu}>
+          <Text style={styles.title}>SELECT CITY</Text>
+          <Text style={styles.subtitle}>Choose your starting location</Text>
+          
+          <ScrollView style={styles.cityList} contentContainerStyle={styles.cityListContent}>
+            <TouchableOpacity
+              style={[styles.cityButton, selectedCity === null && styles.cityButtonSelected]}
+              onPress={() => setSelectedCity(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.cityButtonText, selectedCity === null && styles.cityButtonTextSelected]}>
+                Random City
+              </Text>
+            </TouchableOpacity>
+            
+            {AVAILABLE_CITIES.map((city) => (
+              <TouchableOpacity
+                key={city.id}
+                style={[styles.cityButton, selectedCity === city.id && styles.cityButtonSelected]}
+                onPress={() => setSelectedCity(city.id)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.cityButtonText, selectedCity === city.id && styles.cityButtonTextSelected]}>
+                  {city.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <View style={styles.cityActions}>
+            <TouchableOpacity
+              style={[styles.button, styles.secondaryButton, { marginRight: 12 }]}
+              onPress={() => handleScreenChange('main')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.buttonText}>BACK</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.button, styles.primaryButton, { marginLeft: 12 }]}
+              onPress={handleStartGame}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.buttonText}>START</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.overlay}>
       <View style={styles.menu}>
@@ -26,7 +97,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         
         <TouchableOpacity 
           style={[styles.button, styles.primaryButton]} 
-          onPress={onStartGame}
+          onPress={() => handleScreenChange('select-city')}
           activeOpacity={0.7}
         >
           <Text style={styles.buttonText}>START GAME</Text>
@@ -135,6 +206,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 32,
     fontStyle: 'italic',
+  },
+  cityList: {
+    maxHeight: 400,
+    width: '100%',
+    marginVertical: 20,
+  },
+  cityListContent: {
+    alignItems: 'stretch',
+  },
+  cityButton: {
+    backgroundColor: '#2a2a2a',
+    borderWidth: 2,
+    borderColor: '#555',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginVertical: 4,
+    alignItems: 'center',
+  },
+  cityButtonSelected: {
+    backgroundColor: '#3a3a2a',
+    borderColor: '#FFD700',
+    borderWidth: 3,
+  },
+  cityButtonText: {
+    color: '#aaa',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  cityButtonTextSelected: {
+    color: '#FFD700',
+    fontWeight: 'bold',
+  },
+  cityActions: {
+    flexDirection: 'row',
+    marginTop: 20,
+    justifyContent: 'space-between',
+  },
+  secondaryButton: {
+    backgroundColor: '#2a2a2a',
+    flex: 1,
   },
 });
 
