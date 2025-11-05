@@ -1,8 +1,8 @@
-import { GameState, Vector2, WeaponId, Vehicle } from '../types/Game';
+import { GameState, Vector2, WeaponId, Vehicle, Player } from '../types/Game';
 import { createPlayer, updatePlayer } from '../entities/Player';
 import { createCamera, updateCamera } from './Camera';
 import { generateCityMap } from '../utils/CityMap';
-import { buildTileLookup, TileLookup } from '../utils/TileLookup';
+import { buildTileLookup, TileLookup, getTileAt } from '../utils/TileLookup';
 import { generateCoins, resolveCoinCollection } from '../utils/Collectibles';
 import { spawnNPCsInCity, updateNPC } from '../entities/NPC';
 import { spawnVehiclesInCity, updateVehicle } from '../entities/Vehicle';
@@ -102,6 +102,7 @@ export class GameLoop {
     // Just set a flag - the actual exit will be handled in the next update cycle
     // This prevents race conditions and state conflicts
     if (this.gameState.player.inVehicle) {
+      console.log('[GameLoop] exitVehicle called - setting pendingExit flag');
       this.pendingExit = true;
       this.lastExitAttempt = performance.now(); // Allow immediate exit
     }
@@ -246,7 +247,7 @@ export class GameLoop {
     // BUT: if pendingExit is set, don't sync with vehicle - prepare for exit
     const shouldSyncWithVehicle = !this.pendingExit && playerVehicle && !playerVehicle.parked;
     
-    const updatedPlayer = updatePlayer(
+    let updatedPlayer = updatePlayer(
       {
         ...this.gameState.player,
         inVehicle: playerVehicle?.id,
@@ -269,6 +270,7 @@ export class GameLoop {
       const shouldExit = this.pendingExit || (vehicleSpeed < 5 && inputLength < 0.1 && (currentTime - this.lastExitAttempt > 500));
       
       if (shouldExit) {
+        console.log('[GameLoop] Exiting vehicle - pendingExit:', this.pendingExit, 'vehicleSpeed:', vehicleSpeed);
         // If manual exit and vehicle is moving, stop vehicle first
         if (this.pendingExit && vehicleSpeed > 5) {
           // Stop the vehicle immediately for safe exit
@@ -323,20 +325,32 @@ export class GameLoop {
           }
         }
         
-        updatedPlayer = {
+        console.log('[GameLoop] Exit position:', finalExitPos, 'Player was at:', updatedPlayer.position);
+        
+        // Create a NEW player object (don't mutate)
+        const exitedPlayer: Player = {
           ...updatedPlayer,
           inVehicle: undefined,
-          position: finalExitPos,
+          position: { ...finalExitPos }, // Clone position
           velocity: { x: 0, y: 0 }, // Reset velocity
           speed: 0,
         };
+        
+        // Update vehicles to mark as parked
         updatedVehicles = updatedVehicles.map(v =>
           v.id === playerVehicle!.id ? { ...v, parked: true } : v
         );
+        
+        // Clear vehicle reference and flags
         playerVehicle = undefined;
         this.lastExitAttempt = currentTime; // Reset timer after exit
         this.lastExitTime = currentTime; // Track exit time for cooldown
         this.pendingExit = false; // Clear exit flag
+        
+        // Use the new player object
+        updatedPlayer = exitedPlayer;
+        
+        console.log('[GameLoop] Vehicle exit complete - player now at:', updatedPlayer.position);
       } else {
         // Reset exit timer if vehicle is moving or player is giving input
         this.lastExitAttempt = currentTime;
@@ -402,6 +416,11 @@ export class GameLoop {
 
     // Schedule next frame
     this.animationFrameId = requestAnimationFrame(this.update);
+    
+    // Debug: Log when animation frame is not being scheduled
+    if (!this.animationFrameId) {
+      console.error('[GameLoop] Failed to schedule next frame!');
+    }
   };
 
   getState(): GameState {
